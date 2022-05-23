@@ -1,0 +1,6 @@
+.mypy_cache/
+.venv/
+__pycache__/
+.vscode/
+dummy_*
+__test_db__/
