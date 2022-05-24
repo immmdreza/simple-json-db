@@ -34,3 +34,33 @@ class ComplexProperty(Generic[T], TProperty[T]):
             required=required,
             default_factory=default_factory,
         )
+
+
+class OptionalComplexProperty(Generic[T], TProperty[Optional[T]]):
+    """OptionalComplexProperty is a property that stores a complex value which is not required."""
+
+    def __init__(
+        self,
+        _type_of_entity: type[T],
+        /,
+        *,
+        init: bool = True,
+        json_property_name: Optional[str] = None,
+    ):
+        """Initialize a new ComplexProperty.
+
+        Args:
+            _type_of_entity (`type[T]`): The type of the entity that is stored in the property.
+            init (`bool`, optional): Whether the property should passed to __init__. Defaults to True.
+            json_property_name (`Optional[str]`, optional): The name of the property in the JSON object. Defaults to None.
+        """
+
+        super().__init__(
+            _type_of_entity,
+            init=init,
+            json_property_name=json_property_name,
+            is_list=False,
+            is_complex=True,
+            required=False,
+            default_factory=lambda: None,
+        )

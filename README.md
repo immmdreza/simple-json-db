@@ -177,4 +177,138 @@ async for student in collection:
         collection.delete(student)
 ```
 
+### Complex Properties
+
+You can use more complex models! models that include Other models as property or a list of other models or builtin types.
+
+Let's begin with creating another model called `Grade` that includes some information about an student's grade in a course. We are going to add this to `Student` later.
+
+Since this model is an embed entity, You should inherit from `EmbedEntity`.
+
+```py
+from src.entity import TEntity, EmbedEntity
+
+# ---- sniff ----
+
+class Grade(EmbedEntity):
+    __json_init__ = True
+
+    course_id = IntProperty(required=True)
+    course_name = StrProperty(required=True)
+    score = IntProperty(required=True)
+
+    def __init__(self, course_id: int, course_name: str, score: int):
+        self.course_id = course_id
+        self.course_name = course_name
+        self.score = score
+```
+
+To add this as a new property to the `Student`, we'll use `ComplexProperty`. ( Or `OptionalComplexProperty` for a complex property which is not required ).
+
+Your `Student` class should looks like this:
+
+```py
+from src.entity.properties import IntProperty, StrProperty, OptionalComplexProperty
+
+# ---- sniff ----
+
+class Student(TEntity):
+    __json_init__ = True
+
+    student_id = IntProperty(required=True)
+    first_name = StrProperty(required=True)
+    last_name = StrProperty()
+    grade = OptionalComplexProperty(Grade)
+
+    def __init__(
+        self,
+        student_id: int,
+        first_name: str,
+        last_name: str,
+        grade: Optional[Grade] = None,
+    ):
+        self.student_id = student_id
+        self.first_name = first_name
+        self.last_name = last_name
+        self.grade = grade
+```
+
+1. Note that we passed `Grade` type as the first parameter to the `OptionalComplexProperty`.
+
+Now we can add this grade for all students
+
+```py
+async for student in collection:
+    student.grade = Grade(1, "Math", 90)
+    await collection.update(student)
+```
+
+Let's check if it's working
+
+```py
+jill = await collection.as_queryable.first(lambda s: s.first_name == "Jill")
+    if jill.grade:
+        print(jill.grade.course_name, jill.grade.score)
+
+# Math
+```
+
+### List Properties
+
+As we all know, there may be more than one course per student! Then the grade property, can be grades.
+
+```py
+from src.entity.properties import IntProperty, StrProperty, ListProperty
+
+# ---- sniff ----
+
+class Student(TEntity):
+    __json_init__ = True
+
+    student_id = IntProperty(required=True)
+    first_name = StrProperty(required=True)
+    last_name = StrProperty()
+    grades = ListProperty(Grade, default_factory=list)
+
+    def __init__(
+        self,
+        student_id: int,
+        first_name: str,
+        last_name: str,
+        grades: list[Grade] = [],
+    ):
+        self.student_id = student_id
+        self.first_name = first_name
+        self.last_name = last_name
+        self.grades = grades
+```
+
+Let's update all of entities again.
+
+```py
+async for student in collection:
+    student.grades = [Grade(1, "Math", 90), Grade(2, "English", 80)]
+    await collection.update(student)
+
+# Math 90
+# English 80
+```
+
+Let's change Jill's english score to 50.
+
+```py
+jill = await collection.as_queryable.first(lambda s: s.first_name == "Jill")
+if jill.grades:
+    jill.grades[-1].score = 50
+    await collection.update(jill)
+```
+
+Oh who's score was 50 ??!
+
+```py
+with_50_score = await collection.as_queryable.where(
+    lambda s: any(x.score == 50 for x in s.grades)).single()
+print(with_50_score.first_name)
+```
+
 _That's all for now, check `Collection` object for more ..._

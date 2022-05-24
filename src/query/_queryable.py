@@ -1,4 +1,4 @@
-from typing import Callable, Generic, Optional, Iterator
+from typing import Any, Callable, Generic, Optional, Iterator
 from collections.abc import Iterable, AsyncIterable
 
 from ..serialization._shared import T
@@ -53,7 +53,7 @@ class Queryable(Generic[T], Iterable[T], _Queryable[T]):
         raise StopIteration()
 
     def first_or_default(
-        self, query: Optional[Callable[[type[T]], bool]] = None
+        self, query: Optional[Callable[[type[T]], bool]] = None, default: Any = None
     ) -> Optional[T]:
         if query is not None:
             self._new_query(query)
@@ -61,40 +61,39 @@ class Queryable(Generic[T], Iterable[T], _Queryable[T]):
         for x in self:
             if self._check(x):
                 return x
-
-        return None
+        return default
 
     def single(self, query: Optional[Callable[[type[T]], bool]] = None) -> T:
         if query is not None:
             self._new_query(query)
-
+        r = None
+        found = False
         for x in self:
-            if not self._check(x):
-                continue
-
-            for y in self:
-                if self._check(y):
-                    raise ValueError("More than one element found")
-
-            return x
-        raise ValueError("More than one element found")
+            if self._check(x):
+                if found:
+                    raise ValueError("More than one element found.")
+                r = x
+                found = True
+        if r is not None:
+            return r
+        raise ValueError("No element were found.")
 
     def single_or_default(
-        self, query: Optional[Callable[[type[T]], bool]] = None
+        self, query: Optional[Callable[[type[T]], bool]] = None, default: Any = None
     ) -> Optional[T]:
         if query is not None:
             self._new_query(query)
-
+        r = None
+        found = False
         for x in self:
-            if not self._check(x):
-                continue
-
-            for y in self:
-                if self._check(y):
-                    raise ValueError("More than one element found")
-
-            return x
-        return None
+            if self._check(x):
+                if found:
+                    raise ValueError("More than one element found.")
+                r = x
+                found = True
+        if r is not None:
+            return r
+        return default
 
     def to_list(self) -> list[T]:
         return list(self)
@@ -142,7 +141,7 @@ class AsyncQueryable(Generic[T], AsyncIterable[T], _Queryable[T]):
         raise StopIteration()
 
     async def first_or_default(
-        self, query: Optional[Callable[[type[T]], bool]] = None
+        self, query: Optional[Callable[[type[T]], bool]] = None, default: Any = None
     ) -> Optional[T]:
         if query is not None:
             self._new_query(query)
@@ -150,40 +149,41 @@ class AsyncQueryable(Generic[T], AsyncIterable[T], _Queryable[T]):
         async for x in self:
             if self._check(x):
                 return x
-
-        return None
+        return default
 
     async def single(self, query: Optional[Callable[[type[T]], bool]] = None) -> T:
         if query is not None:
             self._new_query(query)
 
+        r = None
+        found = False
         async for x in self:
-            if not self._check(x):
-                continue
-
-            async for y in self:
-                if self._check(y):
-                    raise ValueError("More than one element found")
-
-            return x
-        raise ValueError("More than one element found")
+            if self._check(x):
+                if found:
+                    raise ValueError("More than one element found.")
+                r = x
+                found = True
+        if r is not None:
+            return r
+        raise ValueError("No element were found.")
 
     async def single_or_default(
-        self, query: Optional[Callable[[type[T]], bool]] = None
+        self, query: Optional[Callable[[type[T]], bool]] = None, default: Any = None
     ) -> Optional[T]:
         if query is not None:
             self._new_query(query)
 
+        r = None
+        found = False
         async for x in self:
-            if not self._check(x):
-                continue
-
-            async for y in self:
-                if self._check(y):
-                    raise ValueError("More than one element found")
-
-            return x
-        return None
+            if self._check(x):
+                if found:
+                    raise ValueError("More than one element found.")
+                r = x
+                found = True
+        if r is not None:
+            return r
+        return default
 
     async def to_list(self) -> list[T]:
         return [x async for x in self]

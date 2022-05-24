@@ -46,3 +46,30 @@ class TEntity(Serializable, ABC):
         Deserialize the entity.
         """
         return deserialize(cls, data)
+
+
+class EmbedEntity(Serializable, ABC):
+    """Abstract template class for embed entities."""
+
+    __json_init__: ClassVar[bool] = False
+    """ Indicates if the data should be passed to __init__ function. """
+
+    @classmethod
+    def get_properties(cls):
+        """
+        Get all properties of the entity.
+        """
+        return get_properties(cls)
+
+    def __serialize__(self) -> JsonObject:
+        """
+        Serialize the entity.
+        """
+        return serialize(self)
+
+    @classmethod
+    def __deserialize__(cls, data: JsonObject):
+        """
+        Deserialize the entity.
+        """
+        return deserialize(cls, data)
