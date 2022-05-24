@@ -158,6 +158,8 @@ _Type hint are fully available._
 
 ### Update data
 
+I guess the name was Johnny not John 🤔, let's change the name of student John to Johnny.
+
 ```py
 async for student in collection:
     if student.first_name == "John":
@@ -166,6 +168,8 @@ async for student in collection:
 ```
 
 ### Delete data
+
+Now that i looked closer, we don't have any john or johnny at all, imma remove johnny then.
 
 ```py
 async for student in collection:
