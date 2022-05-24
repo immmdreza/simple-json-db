@@ -63,9 +63,22 @@ class CollectionEntityTypeDuplicated(Exception):
 
 
 class Engine(ABC):
+    @overload
     def __init__(self, base_path: Path):
-        self._base_path = base_path
-        self._initialize_path(base_path)
+        ...
+
+    @overload
+    def __init__(self, base_path: str):
+        ...
+
+    def __init__(self, base_path: Path | str):
+
+        if isinstance(base_path, str):
+            self._base_path = Path(base_path)
+        else:
+            self._base_path = base_path
+
+        self._initialize_path(self._base_path)
         self.__collections: dict[type[Any], Collection[Any]] = {}
         self.__set_collections()
         self.__initialized = True

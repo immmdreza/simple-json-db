@@ -1,6 +1,5 @@
 from typing import Callable, Generic, Optional
 
-from .. import EmbedEntity
 from .._property import TProperty
 from ...serialization._shared import T
 
@@ -26,9 +25,6 @@ class ComplexProperty(Generic[T], TProperty[T]):
             required (`bool`, optional): Whether the property is required. Defaults to False.
             default_factory (`Optional[Callable[[], Optional[T]]]`, optional): A function that returns a default value for the property. Defaults to None.
         """
-
-        if not issubclass(_type_of_entity, EmbedEntity):
-            raise TypeError("ComplexProperty accepts only subclass of EmbedEntity.")
 
         super().__init__(
             _type_of_entity,
@@ -60,9 +56,6 @@ class OptionalComplexProperty(Generic[T], TProperty[Optional[T]]):
             json_property_name (`Optional[str]`, optional): The name of the property in the JSON object. Defaults to None.
         """
 
-        if not issubclass(_type_of_entity, EmbedEntity):
-            raise TypeError("ComplexProperty accepts only subclass of EmbedEntity.")
-
         super().__init__(
             _type_of_entity,
             init=init,
@@ -83,16 +76,17 @@ class VirtualComplexProperty(Generic[T], OptionalComplexProperty[T]):
     def __init__(
         self,
         _type_of_entity: type[T],
+        _refers_to: str,
         /,
         *,
         json_property_name: Optional[str] = None,
     ):
 
-        if issubclass(_type_of_entity, EmbedEntity):
-            raise TypeError(
-                "VirtualComplexProperty dose not accepts subclass of EmbedEntity."
-            )
-
         super().__init__(
             _type_of_entity, init=False, json_property_name=json_property_name
         )
+        self._refers_to = _refers_to
+
+    @property
+    def refers_to(self):
+        return self._refers_to

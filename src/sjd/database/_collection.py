@@ -11,7 +11,11 @@ from ..entity import TEntity
 from ..query import AsyncQueryable
 from ..serialization import deserialize, serialize
 from ..serialization._shared import T
-from ..entity.properties import VirtualComplexProperty, ReferenceProperty
+from ..entity.properties import (
+    VirtualComplexProperty,
+    ReferenceProperty,
+    VirtualListProperty,
+)
 
 if TYPE_CHECKING:
     from ._engine import Engine
@@ -131,6 +135,36 @@ class Collection(Generic[T]):
             if not self._collection_exists():
                 await self._create_collection()
 
+    async def _manage_referral_properties(self, entity: TEntity):
+        for prop in entity.get_properties():
+            if isinstance(prop, (VirtualComplexProperty, VirtualListProperty)):
+                values: TEntity | list[TEntity] = getattr(entity, prop.actual_name)
+
+                if not isinstance(values, list):
+                    values = [values]
+
+                for value in values:
+                    virtual_reference_found = False
+                    for virt_prop in value.get_properties():
+                        if isinstance(virt_prop, ReferenceProperty):
+                            if virt_prop.actual_name == prop.refers_to:
+                                virtual_reference_found = True
+                                setattr(value, virt_prop.actual_name, entity.id)
+
+                                # get a collection for reference type
+                                col = self._engine.get_collection(prop.type_of_entity)  # type: ignore
+                                if col is None:
+                                    raise ValueError(
+                                        f"No collection for referenced type {prop.type_of_entity} found"  # type: ignore
+                                    )
+
+                                await col.add(value)  # type: ignore
+                                delattr(entity, prop.actual_name)
+                    if not virtual_reference_found:
+                        raise TypeError(
+                            f"No ReferenceProperty found for {prop.refers_to}."
+                        )
+
     async def _add_to_file_async(self, entity: T) -> None:
 
         if not isinstance(entity, self._entity_type):
@@ -138,30 +172,9 @@ class Collection(Generic[T]):
 
         if isinstance(entity, TEntity):
             # Check for reference properties
-            for prop in entity.get_properties():
-                if isinstance(prop, ReferenceProperty):
-                    # Reference property should bind to a complex virtual prop
-                    virtual_complex_found = False
-                    for prop_1 in entity.get_properties():
-                        if isinstance(prop_1, VirtualComplexProperty):
-                            if prop_1.actual_name == prop.bind_to:
-                                virtual_complex_found = True
-                                value: TEntity = getattr(entity, prop.bind_to)
-                                setattr(entity, prop.actual_name, value.id)
-
-                                # get a collection for reference type
-                                col = self._engine.get_collection(prop.refers_to)  # type: ignore
-                                if col is None:
-                                    raise ValueError(
-                                        f"No collection for referenced type {prop.refers_to} found"  # type: ignore
-                                    )
-
-                                await col.add(value)  # type: ignore
-                                setattr(entity, prop.bind_to, None)
-                    if not virtual_complex_found:
-                        raise ValueError(
-                            "The model has a ReferenceProperty, but no suitable VirtualComplexProperty found"
-                        )
+            await self._manage_referral_properties(entity)
+        else:
+            raise TypeError("Entity should be an instance of TEntity.")
 
         async with self._main_file_lock:
             async with aiofiles.open(self._collection_path_builder(), "a") as f:
@@ -175,6 +188,14 @@ class Collection(Generic[T]):
                 raise TypeError(
                     f"All entities must be of type {self._entity_type.__name__}."
                 )
+
+            if isinstance(e, TEntity):
+                # Check for reference properties
+                await self._manage_referral_properties(e)
+            else:
+                raise TypeError("Entity should be an instance of TEntity.")
+
+        # TODO Add reference stuff here too
 
         async with self._main_file_lock:
             async with aiofiles.open(self._collection_path_builder(), "a") as f:
@@ -268,6 +289,13 @@ class Collection(Generic[T]):
                 return data
         return None
 
+    async def get_all_by_prop_name(self, __prop_name: str, value: Any):
+        async for line in self._tmp_collection_file():
+            _j = json.loads(line)
+            if _j[__prop_name] == value:
+                data = deserialize(self._entity_type, _j)
+                yield data
+
     async def drop(self) -> None:
         """Drop the collection."""
 
@@ -354,3 +382,37 @@ class Collection(Generic[T]):
 
         await self._ensure_collection_exists()
         await self._add_many_to_file_async(*entities)
+
+    async def load_virtual_props(self, entity: T, props: Optional[list[str]] = None):
+        # TODO: Specify properties names as optional option
+        """Load all virtual properties based on references."""
+
+        if isinstance(entity, TEntity):
+            for prop in entity.get_properties():
+
+                if props and prop.actual_name not in props:
+                    continue
+
+                except_one = False
+                if isinstance(prop, (VirtualComplexProperty, VirtualListProperty)):
+                    except_one = isinstance(prop, VirtualComplexProperty)
+                    # get a collection for reference type
+                    col = self._engine.get_collection(prop.type_of_entity)  # type: ignore
+                    if col is None:
+                        raise ValueError(
+                            f"No collection for referenced type {prop.type_of_entity} found"  # type: ignore
+                        )
+
+                    # TODO: Is this performance wise ?
+                    results: list[Any] = []
+                    async for item in col.get_all_by_prop_name(
+                        prop.refers_to, entity.id
+                    ):
+                        if except_one:
+                            setattr(entity, prop.actual_name, item)
+                            return
+                        else:
+                            results.append(item)
+                    setattr(entity, prop.actual_name, results)
+        else:
+            raise TypeError("Entity should be an instance of TEntity.")

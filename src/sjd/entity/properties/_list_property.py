@@ -34,3 +34,34 @@ class ListProperty(Generic[T], TProperty[list[T]]):
             is_complex=False,
             default_factory=default_factory,
         )
+
+
+class VirtualListProperty(Generic[T], TProperty[Optional[list[T]]]):
+    """VirtualListProperty is a property that stores a list value which can be loaded lazily."""
+
+    __virtual__ = True
+    """Indicates that this class is a virtual property ( Lazy loader )."""
+
+    def __init__(
+        self,
+        _type_of_entity: type[T],
+        _refers_to: str,
+        /,
+        *,
+        json_property_name: Optional[str] = None,
+    ):
+
+        super().__init__(
+            _type_of_entity,
+            init=False,
+            json_property_name=json_property_name,
+            required=False,
+            is_list=True,
+            is_complex=False,
+            default_factory=list,
+        )
+        self._refers_to = _refers_to
+
+    @property
+    def refers_to(self):
+        return self._refers_to
