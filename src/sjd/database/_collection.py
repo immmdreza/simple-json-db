@@ -11,6 +11,7 @@ from ..entity import TEntity
 from ..query import AsyncQueryable
 from ..serialization import deserialize, serialize
 from ..serialization._shared import T
+from ..entity.properties import VirtualComplexProperty, ReferenceProperty
 
 if TYPE_CHECKING:
     from ._engine import Engine
@@ -134,6 +135,33 @@ class Collection(Generic[T]):
 
         if not isinstance(entity, self._entity_type):
             raise TypeError(f"The entity must be of type {self._entity_type.__name__}.")
+
+        if isinstance(entity, TEntity):
+            # Check for reference properties
+            for prop in entity.get_properties():
+                if isinstance(prop, ReferenceProperty):
+                    # Reference property should bind to a complex virtual prop
+                    virtual_complex_found = False
+                    for prop_1 in entity.get_properties():
+                        if isinstance(prop_1, VirtualComplexProperty):
+                            if prop_1.actual_name == prop.bind_to:
+                                virtual_complex_found = True
+                                value: TEntity = getattr(entity, prop.bind_to)
+                                setattr(entity, prop.actual_name, value.id)
+
+                                # get a collection for reference type
+                                col = self._engine.get_collection(prop.refers_to)  # type: ignore
+                                if col is None:
+                                    raise ValueError(
+                                        f"No collection for referenced type {prop.refers_to} found"  # type: ignore
+                                    )
+
+                                await col.add(value)  # type: ignore
+                                setattr(entity, prop.bind_to, None)
+                    if not virtual_complex_found:
+                        raise ValueError(
+                            "The model has a ReferenceProperty, but no suitable VirtualComplexProperty found"
+                        )
 
         async with self._main_file_lock:
             async with aiofiles.open(self._collection_path_builder(), "a") as f:
