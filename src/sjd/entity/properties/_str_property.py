@@ -30,3 +30,22 @@ class StrProperty(TProperty[str]):
             is_complex=False,
             default_factory=default_factory,
         )
+
+
+class ReferenceProperty(StrProperty):
+    """ReferenceProperty is a property that stores a reference to an entity."""
+
+    def __init__(
+        self,
+        *,
+        init: bool = True,
+        json_property_name: Optional[str] = None,
+        required: bool = False,
+        default_factory: Optional[Callable[[], Optional[str]]] = None,
+    ):
+        super().__init__(
+            init=init,
+            json_property_name=json_property_name,
+            required=required,
+            default_factory=default_factory,
+        )

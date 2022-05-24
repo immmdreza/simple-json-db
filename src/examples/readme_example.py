@@ -1,0 +1,62 @@
+import asyncio
+from pathlib import Path
+
+from src.sjd.database import Engine, __Collection__
+from src.sjd.entity import TEntity, EmbedEntity
+from src.sjd.entity.properties import IntProperty, StrProperty, ListProperty
+
+
+class Grade(EmbedEntity):
+    __json_init__ = True
+
+    course_id = IntProperty(required=True)
+    course_name = StrProperty(required=True)
+    score = IntProperty(required=True)
+
+    def __init__(self, course_id: int, course_name: str, score: int):
+        self.course_id = course_id
+        self.course_name = course_name
+        self.score = score
+
+
+class Student(TEntity):
+    __json_init__ = True
+
+    student_id = IntProperty(required=True)
+    first_name = StrProperty(required=True)
+    last_name = StrProperty()
+    grades = ListProperty(Grade, default_factory=list)
+
+    def __init__(
+        self,
+        student_id: int,
+        first_name: str,
+        last_name: str,
+        grades: list[Grade] = [],
+    ):
+        self.student_id = student_id
+        self.first_name = first_name
+        self.last_name = last_name
+        self.grades = grades
+
+
+class AppEngine(Engine):
+
+    students = __Collection__(Student)
+
+    def __init__(self):
+        super().__init__(Path("__test_db__"))
+
+
+async def main():
+
+    engine = AppEngine()
+
+    await engine.students.add_many(
+        Student(1, "John", "Doe", [Grade(1, "Math", 90), Grade(2, "English", 80)]),
+        Student(2, "Jane", "Doe", [Grade(1, "Math", 90), Grade(2, "English", 80)]),
+    )
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

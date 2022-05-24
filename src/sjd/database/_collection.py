@@ -3,7 +3,7 @@ import json
 import os
 import shutil
 from pathlib import Path
-from typing import Any, AsyncIterable, Callable, Generic, Optional
+from typing import Any, AsyncIterable, Callable, Generic, Optional, TYPE_CHECKING, final
 
 import aiofiles
 
@@ -11,7 +11,9 @@ from ..entity import TEntity
 from ..query import AsyncQueryable
 from ..serialization import deserialize, serialize
 from ..serialization._shared import T
-from ._engine import Engine
+
+if TYPE_CHECKING:
+    from ._engine import Engine
 
 
 class _TempCollectionFile(AsyncIterable[str]):
@@ -38,7 +40,7 @@ class Collection(Generic[T]):
     """A collection of an specified entity type. Acts like a table."""
 
     def __init__(
-        self, engine: Engine, entity_type: type[T], name: Optional[str] = None, /
+        self, engine: "Engine", entity_type: type[T], name: Optional[str] = None, /
     ) -> None:
         """Create a new collection.
 
@@ -48,8 +50,8 @@ class Collection(Generic[T]):
             name (`str`, optional): The name of the collection. Defaults to name of entity_type.
         """
 
-        if engine is None or not isinstance(engine, Engine):  # type: ignore
-            raise ValueError("engine must be an instance of Engine")
+        # if engine is None or not isinstance(engine, Engine):  # type: ignore
+        #     raise ValueError("engine must be an instance of Engine")
         self._engine = engine
 
         if entity_type is None or not isinstance(entity_type, type):  # type: ignore
@@ -67,6 +69,16 @@ class Collection(Generic[T]):
         self._main_file_lock = asyncio.Lock()
 
     @property
+    def name(self) -> str:
+        """Get the name of the collection."""
+        return self._name
+
+    @property
+    def entity_type(self) -> type[T]:
+        """Get the type of the entity."""
+        return self._entity_type
+
+    @property
     def as_queryable(self) -> AsyncQueryable[T]:
         """Get a queryable object for this collection."""
         return AsyncQueryable(self)
@@ -75,11 +87,28 @@ class Collection(Generic[T]):
     def _check_by_id(line_of: str, __id: str) -> bool:
         return line_of[10:46] == __id
 
+    @final
+    def _collection_path_builder(self):
+        return self._engine.base_path / self._name
+
+    @final
+    def _collection_tmp_path_builder(self, instance_number: int):
+        return self._engine.base_path / f"__{self._name}_{instance_number}__"
+
+    @final
+    def _collection_exists(self) -> bool:
+        collection_path = self._collection_path_builder()
+        return collection_path.exists()
+
+    @final
+    async def _create_collection(self):
+        collection_path = self._collection_path_builder()
+        async with aiofiles.open(collection_path, "w") as f:
+            await f.write("")
+
     async def _tmp_collection_file(self):
-        tmp_path = self._engine.collection_tmp_path_builder(
-            self._name, self._instance_numbers
-        )
-        main_file = self._engine.collection_path_builder(self._name)
+        tmp_path = self._collection_tmp_path_builder(self._instance_numbers)
+        main_file = self._collection_path_builder()
 
         async with self._main_file_lock:
             shutil.copyfile(main_file.absolute(), tmp_path.absolute())
@@ -98,8 +127,8 @@ class Collection(Generic[T]):
 
     async def _ensure_collection_exists(self) -> None:
         async with self._main_file_lock:
-            if not self._engine.collection_exists(self._name):
-                await self._engine.create_collection(self._name)
+            if not self._collection_exists():
+                await self._create_collection()
 
     async def _add_to_file_async(self, entity: T) -> None:
 
@@ -107,9 +136,7 @@ class Collection(Generic[T]):
             raise TypeError(f"The entity must be of type {self._entity_type.__name__}.")
 
         async with self._main_file_lock:
-            async with aiofiles.open(
-                self._engine.collection_path_builder(self._name), "a"
-            ) as f:
+            async with aiofiles.open(self._collection_path_builder(), "a") as f:
                 data = json.dumps(serialize(entity))
                 await f.write(data + "\n")
 
@@ -122,9 +149,7 @@ class Collection(Generic[T]):
                 )
 
         async with self._main_file_lock:
-            async with aiofiles.open(
-                self._engine.collection_path_builder(self._name), "a"
-            ) as f:
+            async with aiofiles.open(self._collection_path_builder(), "a") as f:
                 for entity in entities:
                     data = json.dumps(serialize(entity))
                     await f.write(data + "\n")
@@ -140,8 +165,8 @@ class Collection(Generic[T]):
             raise ValueError("query must not be None")
 
         async with self._main_file_lock:
-            file_path = self._engine.collection_path_builder(self._name)
-            tmp_path = self._engine.collection_tmp_path_builder(self._name, 0)
+            file_path = self._collection_path_builder()
+            tmp_path = self._collection_tmp_path_builder(0)
             modified = False
             async with aiofiles.open(file_path, "r") as f:
                 async with aiofiles.open(tmp_path, "w") as tmp_f:
@@ -175,8 +200,8 @@ class Collection(Generic[T]):
             raise TypeError(f"The entity must be of type {self._entity_type.__name__}.")
 
         async with self._main_file_lock:
-            file_path = self._engine.collection_path_builder(self._name)
-            tmp_path = self._engine.collection_tmp_path_builder(self._name, 0)
+            file_path = self._collection_path_builder()
+            tmp_path = self._collection_tmp_path_builder(0)
             modified = False
             async with aiofiles.open(file_path, "r") as f:
                 async with aiofiles.open(tmp_path, "w") as tmp_f:
@@ -219,8 +244,8 @@ class Collection(Generic[T]):
         """Drop the collection."""
 
         async with self._main_file_lock:
-            if self._engine.collection_exists(self._name):
-                os.remove(self._engine.collection_path_builder(self._name).absolute())
+            if self._collection_exists():
+                os.remove(self._collection_path_builder().absolute())
 
     async def update(self, entity: T) -> None:
         """Update an entity in the collection.

@@ -32,18 +32,32 @@ class Student(TEntity):
 We have an `Engine` and some `Collection`s. The first one is your database, the second is your table.
 
 ```py
-import asyncio
-import pathlib
+from sjd.database import Engine, __Collection__
 
-engine = Engine(pathlib.Path("__test_db__"))
-collection = Collection(engine, Student)
+class AppEngine(Engine):
+
+    students = __Collection__(Student)
+
+    def __init__(self):
+        super().__init__(Path("__test_db__"))
+
 ```
 
 1. The engine will create a directory named `__test_db__`.
 2. inside `__test_db__` the collections are stored.
-3. You **SHOULD** pass `engine` to the `Collection`.
-4. You **SHOULD** pass the type of your entity (`entity_type`) to the `Collection`. Here is `Student`.
-5. The collection name will be `entity_type.__name__`.
+3. You **SHOULD** pass the type of your entity (`entity_type`) to the `__Collection__`. Here is `Student`.
+4. type `__Collection__` is a descriptor! The actual thing is `Collection`.
+5. The collection name will be class variable's name ( `students` here ).
+
+### Create engine instance
+
+After setting up engine, you can create an instance of it. And you have access to the collections.
+
+```py
+engine = AppEngine()
+
+collection = engine.students
+```
 
 ### Construct first data
 

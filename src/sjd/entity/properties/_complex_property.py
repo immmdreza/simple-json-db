@@ -64,3 +64,22 @@ class OptionalComplexProperty(Generic[T], TProperty[Optional[T]]):
             required=False,
             default_factory=lambda: None,
         )
+
+
+class VirtualComplexProperty(Generic[T], OptionalComplexProperty[T]):
+    """VirtualComplexProperty is a property that stores a complex value which can be loaded lazily."""
+
+    __virtual__ = True
+    """Indicates that this class is a virtual property ( Lazy loader )."""
+
+    def __init__(
+        self,
+        _type_of_entity: type[T],
+        /,
+        *,
+        init: bool = True,
+        json_property_name: Optional[str] = None,
+    ):
+        super().__init__(
+            _type_of_entity, init=init, json_property_name=json_property_name
+        )
