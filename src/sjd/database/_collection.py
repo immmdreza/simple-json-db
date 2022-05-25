@@ -5,6 +5,7 @@ import shutil
 from pathlib import Path
 from typing import (
     Any,
+    AsyncGenerator,
     AsyncIterable,
     Callable,
     Generic,
@@ -12,12 +13,13 @@ from typing import (
     TYPE_CHECKING,
     TypeVar,
     final,
+    overload,
 )
 
 import ijson  # type: ignore
 import aiofiles
 
-from ..entity import TEntity
+from ..entity import TEntity, TProperty
 from ..query import AsyncQueryable
 from ..serialization import deserialize, serialize
 from ..serialization._shared import T
@@ -303,17 +305,49 @@ class Collection(Generic[T]):
                 return data
         return None
 
-    async def iter_by_prop_value(self, __prop_name: str, __value: Any, /):
+    @overload
+    def iter_by_prop_value(
+        self, selector: str, __value: Any, /
+    ) -> AsyncGenerator[T, None]:
         """Iterate over all entities that have a certain property value.
 
         Args:
-            __prop_name (`str`): The name of the property
+            selector (`str`): The name of the property
+            (You can use something like `item.name`, but The item should be an EmbedEntity).
+            __value (`Any`): The value of the property.
+        """
+        ...
+
+    @overload
+    def iter_by_prop_value(
+        self, selector: Callable[[type[T]], Any], __value: Any, /
+    ) -> AsyncGenerator[T, None]:
+        """Iterate over all entities that have a certain property value.
+
+        Args:
+            selector (`str`): A function to select a property (Can't allow nested props).
+            __value (`Any`): The value of the property.
+        """
+        ...
+
+    async def iter_by_prop_value(
+        self, selector: str | Callable[[type[T]], Any], __value: Any, /
+    ) -> AsyncGenerator[T, None]:
+        """Iterate over all entities that have a certain property value.
+
+        Args:
+            selector (`str`): The name of the property
             (You can use something like `item.name`, but The item should be an EmbedEntity).
             __value (`Any`): The value of the property.
         """
 
+        if callable(selector):
+            prop = selector(self._entity_type)
+            if isinstance(prop, TProperty):
+                selector = prop.json_property_name or prop.actual_name
+
         async for line in self._tmp_collection_file("rb"):
-            for item in ijson.items(line, __prop_name):
+            for item in ijson.items(line, selector):
                 if item == __value:
                     data = deserialize(self._entity_type, json.loads(line))
                     if data is not None:
@@ -407,7 +441,7 @@ class Collection(Generic[T]):
         await self._ensure_collection_exists()
         await self._add_many_to_file_async(*entities)
 
-    async def load_virtual_props(self, entity: T, props: Optional[list[str]] = None):
+    async def load_virtual_props(self, entity: T, *props: str):
         # TODO: Specify properties names as optional option
         """Load all virtual properties based on references."""
 
@@ -439,7 +473,7 @@ class Collection(Generic[T]):
         else:
             raise TypeError("Entity should be an instance of TEntity.")
 
-    async def iter_virtual_objects(
+    async def iter_referenced_by(
         self,
         entity: T,
         selector: Callable[[type[T]], Optional[_T] | Optional[list[_T]]],

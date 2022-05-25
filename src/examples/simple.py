@@ -1,9 +1,9 @@
 import asyncio
 from pathlib import Path
 
-from src.sjd.database import Engine, __Collection__
-from src.sjd.entity import TEntity, EmbedEntity
-from src.sjd.entity.properties import IntProperty, StrProperty, ListProperty
+from sjd.database import Engine, __Collection__
+from sjd.entity import TEntity, EmbedEntity
+from sjd.entity.properties import IntProperty, StrProperty, ListProperty
 
 
 class Grade(EmbedEntity):

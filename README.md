@@ -325,4 +325,165 @@ with_50_score = await collection.as_queryable.where(
 print(with_50_score.first_name)
 ```
 
-_That's all for now, check `Collection` object for more ..._
+### Getting data ( Fast way )
+
+There are two methods that are probably faster than `as_queryable` way.
+
+1. `get(__id: str)`
+
+    Get an entity by it's id, Which is (`entity.id`). We use this for `update` and `delete` method.
+
+2. `iter_by_prop_value(__prop: str, __value: Any)`
+
+    Use this to do an `async iterate` over all entities with `entity[__prop] == __value`.
+    We use this to work with virtual objects.
+
+```py
+async for student in engine.students.iter_by_prop_value("first_name", "Jill"):
+    print(student.last_name)
+```
+
+or
+
+```py
+async for student in engine.students.iter_by_prop_value(lambda s: s.first_name, "Jill"):
+    print(student.last_name)
+```
+
+### Virtual properties
+
+It was a good idea to use another model inside our main model to store additional data, but we don't actually want to load all of data while getting our main model. ( You don't want to load students's grade every time, since it's costly. )
+
+It's better use a separate entity for grade and make it related to the student. Here, the grade will be a `virtual complex property`.
+
+And the grade will use a `reference property` to the student id.
+
+Since the `Grade` is going to be a separate entity, we should add it to our `AppEngine`.
+
+1. First, let's modify the `Student` class.
+
+    We will replace `ListProperty` with `VirtualListProperty`.
+
+    ```py
+    # ---- sniff ----
+
+    from sjd.entity.properties import VirtualListProperty
+
+    class Student(TEntity):
+        __json_init__ = True
+
+        student_id = IntProperty(required=True)
+        first_name = StrProperty(required=True)
+        last_name = StrProperty()
+
+        grades = VirtualListProperty(Grade, "student_id")
+
+        def __init__(
+            self,
+            student_id: int,
+            first_name: str,
+            last_name: str,
+            grades: list[Grade] = [],
+        ):
+            self.student_id = student_id
+            self.first_name = first_name
+            self.last_name = last_name
+            self.grades = grades
+
+    ```
+
+    `VirtualListProperty` takes type of entity it refers to and the name of `ReferenceProperty` which we'll declare later inside `Grade` class ( `student_id` ).
+
+2. Modifying `Grade`.
+
+    The class should inherit from `TEntity` instead of `EmbedEntity`, since it's a separate entity now.
+
+    ```py
+    # ---- sniff ----
+
+    from sjd.entity.properties import ReferenceProperty
+
+    class Grade(TEntity):
+        __json_init__ = True
+
+        course_id = IntProperty(required=True)
+        course_name = StrProperty(required=True)
+        score = IntProperty(required=True)
+
+        student_id = ReferenceProperty()
+
+        def __init__(self, course_id: int, course_name: str, score: int):
+            self.course_id = course_id
+            self.course_name = course_name
+            self.score = score
+    ```
+
+    Note that we added `student_id = ReferenceProperty()`. The attribute name should be the same we declared inside `Student`'s `VirtualListProperty`'s second parameter (`student_id`).
+
+3. Finally, modifying `AppEngine`
+
+    We only need to add `Grade` to the `AppEngine`, just like `Student`.
+
+    ```py
+    class AppEngine(Engine):
+
+        students = __Collection__(Student)
+        grades = __Collection__(Grade)
+
+        def __init__(self):
+            super().__init__("__test_db__")
+    ```
+
+4. **Add data**. You can now add your data just like before.
+
+    ```py
+    engine = AppEngine()
+
+    await engine.students.add(
+        Student(1, "Arash", "Doe", [Grade(1, "Physics", 20)]),
+    )
+    ```
+
+5. Getting data
+
+    If you try getting one of your students now, you'll see the `grades` property is an empty list.
+
+    ```py
+    arash = await engine.students.as_queryable.first(
+        lambda s: s.first_name == "Arash"
+    )
+    print(arash.grades)
+
+    # []
+    ```
+
+    _The `grades` is some kind of `lazy property`._
+
+    to load virtual data, you can use method `load_virtual_props`
+
+    ```py
+    await engine.students.load_virtual_props(arash)
+    print(arash.grades)
+
+    # [<__main__.Grade object at 0x0000021B3AF7FAC0>]
+    ```
+
+    or you can specify property's name ( if you have more than one ).
+
+    ```py
+    await engine.students.load_virtual_props(arash, "grades")
+    print(arash.grades)
+    ```
+
+    Here you go, you have your grades.
+
+    **Or even better**, you can iter over grades WITHOUT calling `load_virtual_props` ( less costly again ).
+
+    You use `iter_referenced_by`:
+
+    ```py
+    async for grade in engine.students.iter_referenced_by(arash, lambda s: s.grades):
+        print(grade.course_name)
+    ```
+
+_Working examples are available under [src/examples](src/examples)._
