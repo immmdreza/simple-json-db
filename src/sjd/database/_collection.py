@@ -8,6 +8,7 @@ from typing import (
     AsyncGenerator,
     AsyncIterable,
     Callable,
+    Coroutine,
     Generic,
     Optional,
     TYPE_CHECKING,
@@ -354,6 +355,29 @@ class Collection(Generic[T]):
                         yield data
                     break
 
+    @overload
+    def get_first(
+        self, selector: str, __value: Any
+    ) -> Coroutine[Any, Any, Optional[T]]:
+        """Get the first entity that has a certain property value."""
+        ...
+
+    @overload
+    def get_first(
+        self, selector: Callable[[type[T]], Any], __value: Any
+    ) -> Coroutine[Any, Any, Optional[T]]:
+        """Get the first entity that has a certain property value."""
+        ...
+
+    async def get_first(
+        self, selector: str | Callable[[type[T]], Any], __value: Any
+    ) -> Optional[T]:
+        """Get the first entity that has a certain property value."""
+
+        async for item in self.iter_by_prop_value(selector, __value):
+            return item
+        return None
+
     async def drop(self) -> None:
         """Drop the collection."""
 
@@ -442,7 +466,6 @@ class Collection(Generic[T]):
         await self._add_many_to_file_async(*entities)
 
     async def load_virtual_props(self, entity: T, *props: str):
-        # TODO: Specify properties names as optional option
         """Load all virtual properties based on references."""
 
         if isinstance(entity, TEntity):

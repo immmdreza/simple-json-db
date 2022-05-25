@@ -1,61 +1,44 @@
 import asyncio
-from pathlib import Path
+from typing import Optional
 
-from sjd.database import Engine, __Collection__
-from sjd.entity import TEntity, EmbedEntity
-from sjd.entity.properties import IntProperty, StrProperty, ListProperty
+from sjd import TEntity, Engine, __Collection__, properties as props
 
 
-class Grade(EmbedEntity):
-    __json_init__ = True
-
-    course_id = IntProperty(required=True)
-    course_name = StrProperty(required=True)
-    score = IntProperty(required=True)
-
-    def __init__(self, course_id: int, course_name: str, score: int):
-        self.course_id = course_id
-        self.course_name = course_name
-        self.score = score
-
-
+# Create a model to store.
 class Student(TEntity):
-    __json_init__ = True
+    __json_init__ = True  # This is required if you wanna use __init__.
 
-    student_id = IntProperty(required=True)
-    first_name = StrProperty(required=True)
-    last_name = StrProperty()
-    grades = ListProperty(Grade, default_factory=list)
+    # Here are some properties to store.
+    first_name = props.StrProperty(required=True)
+    last_name = props.OptionalProperty(str)
 
-    def __init__(
-        self,
-        student_id: int,
-        first_name: str,
-        last_name: str,
-        grades: list[Grade] = [],
-    ):
-        self.student_id = student_id
+    def __init__(self, first_name: str, last_name: Optional[str]):
         self.first_name = first_name
         self.last_name = last_name
-        self.grades = grades
 
 
+# Setup the engine
 class AppEngine(Engine):
 
+    # Add a collection which is for model Student
     students = __Collection__(Student)
 
     def __init__(self):
-        super().__init__(Path("__test_db__"))
+        super().__init__("__test_db__")
+
+
+engine = AppEngine()
 
 
 async def main():
 
-    engine = AppEngine()
+    students = engine.students
 
-    await engine.students.add_many(
-        Student(1, "John", "Doe", [Grade(1, "Math", 90), Grade(2, "English", 80)]),
-        Student(2, "Jane", "Doe", [Grade(1, "Math", 90), Grade(2, "English", 80)]),
-    )
+    await students.add(Student("John", "Doe"))
+
+    john = await students.get_first(lambda s: s.first_name, "John")
+    if john:
+        print(john.id)
 
 
 if __name__ == "__main__":

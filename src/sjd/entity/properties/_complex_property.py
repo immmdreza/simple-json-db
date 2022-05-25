@@ -1,5 +1,6 @@
 from typing import Callable, Generic, Optional
 
+from ._optional_property import OptionalProperty
 from .._property import TProperty
 from ...serialization._shared import T
 
@@ -37,7 +38,7 @@ class ComplexProperty(Generic[T], TProperty[T]):
         )
 
 
-class OptionalComplexProperty(Generic[T], TProperty[Optional[T]]):
+class OptionalComplexProperty(Generic[T], OptionalProperty[T]):
     """OptionalComplexProperty is a property that stores a complex value which is not required."""
 
     def __init__(
@@ -62,7 +63,6 @@ class OptionalComplexProperty(Generic[T], TProperty[Optional[T]]):
             json_property_name=json_property_name,
             is_list=False,
             is_complex=True,
-            required=False,
             default_factory=lambda: None,
         )
 

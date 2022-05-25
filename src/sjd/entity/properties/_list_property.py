@@ -1,4 +1,5 @@
 from typing import Callable, Generic, Optional
+
 from .._property import TProperty
 from ...serialization._shared import T
 

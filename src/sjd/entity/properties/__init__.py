@@ -3,6 +3,7 @@ from ._complex_property import (
     OptionalComplexProperty,
     VirtualComplexProperty,
 )
+from ._optional_property import OptionalProperty
 from ._list_property import ListProperty, VirtualListProperty
 from ._int_property import IntProperty
 from ._str_property import StrProperty, ReferenceProperty
@@ -14,6 +15,7 @@ __all__ = [
     "OptionalComplexProperty",
     "VirtualComplexProperty",
     "VirtualListProperty",
+    "OptionalProperty",
     "ComplexProperty",
     "ListProperty",
     "IntProperty",
