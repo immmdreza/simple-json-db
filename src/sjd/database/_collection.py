@@ -3,8 +3,18 @@ import json
 import os
 import shutil
 from pathlib import Path
-from typing import Any, AsyncIterable, Callable, Generic, Optional, TYPE_CHECKING, final
+from typing import (
+    Any,
+    AsyncIterable,
+    Callable,
+    Generic,
+    Optional,
+    TYPE_CHECKING,
+    TypeVar,
+    final,
+)
 
+import ijson  # type: ignore
 import aiofiles
 
 from ..entity import TEntity
@@ -21,13 +31,17 @@ if TYPE_CHECKING:
     from ._engine import Engine
 
 
+_T = TypeVar("_T")
+
+
 class _TempCollectionFile(AsyncIterable[str]):
-    def __init__(self, file_path: Path) -> None:
+    def __init__(self, file_path: Path, mode: Any = "r") -> None:
         self._file_path = file_path
+        self._mode = mode
         self._file = None
 
     async def __aiter__(self):
-        async with aiofiles.open(self._file_path, "r") as tmp_file:
+        async with aiofiles.open(self._file_path, self._mode) as tmp_file:
             self._file = tmp_file
             async for line in tmp_file:
                 yield line
@@ -111,7 +125,7 @@ class Collection(Generic[T]):
         async with aiofiles.open(collection_path, "w") as f:
             await f.write("")
 
-    async def _tmp_collection_file(self):
+    async def _tmp_collection_file(self, mode: Any = "r"):
         tmp_path = self._collection_tmp_path_builder(self._instance_numbers)
         main_file = self._collection_path_builder()
 
@@ -119,7 +133,7 @@ class Collection(Generic[T]):
             shutil.copyfile(main_file.absolute(), tmp_path.absolute())
 
         self._instance_numbers += 1
-        async with _TempCollectionFile(tmp_path) as tmp_file:
+        async with _TempCollectionFile(tmp_path, mode) as tmp_file:
             async for line in tmp_file:
                 yield line
             self._instance_numbers -= 1
@@ -289,12 +303,22 @@ class Collection(Generic[T]):
                 return data
         return None
 
-    async def get_all_by_prop_name(self, __prop_name: str, value: Any):
-        async for line in self._tmp_collection_file():
-            _j = json.loads(line)
-            if _j[__prop_name] == value:
-                data = deserialize(self._entity_type, _j)
-                yield data
+    async def iter_by_prop_value(self, __prop_name: str, __value: Any, /):
+        """Iterate over all entities that have a certain property value.
+
+        Args:
+            __prop_name (`str`): The name of the property
+            (You can use something like `item.name`, but The item should be an EmbedEntity).
+            __value (`Any`): The value of the property.
+        """
+
+        async for line in self._tmp_collection_file("rb"):
+            for item in ijson.items(line, __prop_name):
+                if item == __value:
+                    data = deserialize(self._entity_type, json.loads(line))
+                    if data is not None:
+                        yield data
+                    break
 
     async def drop(self) -> None:
         """Drop the collection."""
@@ -405,14 +429,38 @@ class Collection(Generic[T]):
 
                     # TODO: Is this performance wise ?
                     results: list[Any] = []
-                    async for item in col.get_all_by_prop_name(
-                        prop.refers_to, entity.id
-                    ):
+                    async for item in col.iter_by_prop_value(prop.refers_to, entity.id):
                         if except_one:
                             setattr(entity, prop.actual_name, item)
                             return
                         else:
                             results.append(item)
                     setattr(entity, prop.actual_name, results)
+        else:
+            raise TypeError("Entity should be an instance of TEntity.")
+
+    async def iter_virtual_objects(
+        self,
+        entity: T,
+        selector: Callable[[type[T]], Optional[_T] | Optional[list[_T]]],
+    ) -> AsyncIterable[_T]:
+        """Iterate over all virtual objects of an property.
+
+        Args:
+            entity (`T`): The reference entity.
+            selector (`Callable[[type[T]], _T | list[_T]]`): The property selector should select a virtual prop.
+        """
+
+        if isinstance(entity, TEntity):
+            prop = selector(self._entity_type)
+            if isinstance(prop, (VirtualComplexProperty, VirtualListProperty)):
+                # get a collection for reference type
+                col = self._engine.get_collection(prop.type_of_entity)
+                if col is None:
+                    raise ValueError(
+                        f"No collection for referenced type {prop.type_of_entity} found"
+                    )
+                async for item in col.iter_by_prop_value(prop.refers_to, entity.id):
+                    yield item  # type: ignore
         else:
             raise TypeError("Entity should be an instance of TEntity.")
