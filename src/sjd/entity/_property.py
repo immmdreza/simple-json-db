@@ -22,6 +22,7 @@ class TProperty(Generic[T], ABC):
         is_list: bool = False,
         is_complex: bool = False,
         default_factory: Optional[Callable[[], Optional[T]]] = None,
+        actual_name: Optional[str] = None,
     ):
         """Initialize a new TProperty.
 
@@ -42,6 +43,7 @@ class TProperty(Generic[T], ABC):
         self._is_complex: bool = is_complex
         self._default_factory = default_factory
         self._access_trail: tuple[str, ...]
+        self._actual_name = actual_name
 
     def __set_name__(self, owner: type[object], name: str) -> None:
         self._actual_name = name
@@ -59,12 +61,30 @@ class TProperty(Generic[T], ABC):
     ) -> "TProperty[T]" | T:
         if obj is None:
             return self
+
+        if self._actual_name is None:
+            raise AttributeError(
+                "Attribute is not initialized! Did you missed __init__ or super().__init__ inside it?"
+            )
+
         return cast(T, obj.__dict__[self._actual_name])
 
     def __set__(self, obj: object, value: T) -> None:
+
+        if self._actual_name is None:
+            raise AttributeError(
+                "Attribute is not initialized! Did you missed __init__ or super().__init__ inside it?"
+            )
+
         obj.__dict__[self._actual_name] = value
 
     def __delete__(self, obj: object) -> None:
+
+        if self._actual_name is None:
+            raise AttributeError(
+                "Attribute is not initialized! Did you missed __init__ or super().__init__ inside it?"
+            )
+
         del obj.__dict__[self._actual_name]
 
     def update_access_trail(self, *names: str) -> None:
@@ -87,6 +107,12 @@ class TProperty(Generic[T], ABC):
     @property
     def actual_name(self) -> str:
         """The name of the property in the Python object."""
+
+        if self._actual_name is None:
+            raise AttributeError(
+                "Attribute is not initialized! Did you missed __init__ or super().__init__ inside it?"
+            )
+
         return self._actual_name
 
     @property

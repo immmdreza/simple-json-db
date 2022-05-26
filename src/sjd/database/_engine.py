@@ -107,6 +107,20 @@ class Engine(ABC):
         self.__set_collections()
         self.__initialized = True
 
+    def __setitem__(self, name: str, entity_type: type[Any]) -> None:
+        """Manually registers a collection."""
+        self.register_collection(entity_type, name)
+
+    def __getitem__(self, entity_type: type[T]) -> Collection[T]:
+        """Gets a collection by entity type.
+
+        Args:
+            entity_type (`type[T]`): The entity type of the collection.
+        """
+        if (col := self.get_collection(entity_type)) is not None:
+            return col
+        raise KeyError(f"Collection of type {entity_type} is not registered")
+
     def __set_collections(self):
         for _, col in inspect.getmembers(type(self)):
             if isinstance(col, __Collection__):

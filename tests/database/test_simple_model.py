@@ -1,20 +1,11 @@
-from typing import ClassVar
 import pytest
 
 from ..test_engine import test_engine, TestEngine  # type: ignore
 from src.sjd import TEntity, properties as props
 
 
+@props.collect_props_from_init
 class SimpleModel(TEntity):
-    __json_init__: ClassVar[bool] = True
-
-    # @props.string("name") # ? Feature
-
-    numeric_field = props.IntProperty()
-    string_field = props.StrProperty()
-    boolean_field = props.BoolProperty()
-    float_field = props.FloatProperty()
-
     def __init__(
         self,
         numeric_field: int,
@@ -30,13 +21,13 @@ class SimpleModel(TEntity):
 
 @pytest.fixture
 def my_engine(test_engine: TestEngine) -> TestEngine:
-    test_engine.register_collection(SimpleModel)
+    test_engine["simpleModels"] = SimpleModel
     return test_engine
 
 
 async def test_add_data(my_engine: TestEngine):
     with my_engine:
-        collection = my_engine.get_collection(SimpleModel)
+        collection = my_engine[SimpleModel]
         assert collection
 
         await collection.add(SimpleModel(1, "test", True, 1.0))

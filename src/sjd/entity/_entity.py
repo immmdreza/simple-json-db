@@ -2,8 +2,8 @@ from abc import ABC
 from typing import Any, ClassVar, Optional
 import uuid
 
+from ._property import TProperty
 from .._._type_alias import JsonObject
-from .properties import StrProperty
 from ..serialization._serializable import Serializable
 from ..serialization._shared import get_properties
 from ..serialization._deserializer import deserialize
@@ -16,7 +16,7 @@ class TEntity(Serializable, ABC):
     __json_init__: ClassVar[bool] = False
     """ Indicates if the data should be passed to __init__ function. """
 
-    __id = StrProperty(required=True, init=False, json_property_name="__id")
+    __id = TProperty[str](str, required=True, init=False, json_property_name="__id")
 
     def __new__(cls, *args: Any, **kwargs: Any):
         obj = object.__new__(cls)
