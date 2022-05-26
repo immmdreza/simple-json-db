@@ -218,4 +218,4 @@ class Engine(ABC):
         Returns:
             `__Collection__[T]`: The descriptor of the collection. can only be used as an engine's `ClassVar`.
         """
-        return __Collection__(entity_type)
+        return __Collection__[T](entity_type)

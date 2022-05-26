@@ -3,6 +3,7 @@ from types import NoneType
 from typing import Any, Callable, NoReturn
 
 from .._entity import TEntity, EmbedEntity, TProperty
+from ...serialization._shared import T
 
 
 VALID_TYPES = (  # type: ignore
@@ -64,7 +65,7 @@ def __grab_props(__init__: Callable[..., Any]):
         yield k, *__resolve_type(k, annotation)
 
 
-def collect_props_from_init(Cls: type[Any], /) -> type[Any]:
+def collect_props_from_init(Cls: type[T], /) -> type[T]:
     """Automatically collect properties from `__init__` method.
 
     Note that only valid types are allowed.

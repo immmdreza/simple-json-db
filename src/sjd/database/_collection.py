@@ -39,25 +39,39 @@ _T = TypeVar("_T")
 
 
 class CollectionIterContext(Generic[T], AsyncIterable[T]):
-    def __init__(self, entity_type: type[T], file_path: Path, mode: Any = "r") -> None:
-        self._entity_type = entity_type
+    def __init__(
+        self, collection: "Collection[T]", file_path: Path, mode: Any = "r"
+    ) -> None:
+        self._collection = collection
         self._file_path = file_path
         self._mode = mode
+        self._initialized = False
+        self._closed = False
         self._file = None
+
+    @property
+    def closed(self):
+        return self._closed
 
     async def __aiter__(self):
         async for line in self.iter_lines():
-            obj = deserialize(self._entity_type, json.loads(line))
+            obj = deserialize(self._collection.entity_type, json.loads(line))
             if obj is not None:
                 yield obj
 
     async def __aenter__(self):
+        if not self._initialized:
+            await self._collection.copy_main_file(self._file_path)
+            self._initialized = True
         return self
 
     async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any):
         await self.close()
 
     async def iter_lines(self) -> AsyncGenerator[str, None]:
+        if not self._initialized:
+            await self.__aenter__()
+
         async with aiofiles.open(self._file_path, self._mode) as tmp_file:
             self._file = tmp_file
             async for line in tmp_file:
@@ -65,7 +79,9 @@ class CollectionIterContext(Generic[T], AsyncIterable[T]):
 
     async def close(self):
         if self._file is not None:
-            await self._file.close()
+            if not self.closed:
+                await self._file.close()
+                self._closed = True
         os.remove(self._file_path)
 
     @final
@@ -108,16 +124,17 @@ class Collection(Generic[T]):
         self._main_iter_ctx: Optional[CollectionIterContext[T]] = None
 
     async def __aenter__(self):
-        self._main_iter_ctx = await self.get_iter_context()
+        self._main_iter_ctx = self.iterate()
         return self._main_iter_ctx
 
     async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any):
         if self._main_iter_ctx is not None:
-            await self._main_iter_ctx.close()
+            if not self._main_iter_ctx.closed:
+                await self._main_iter_ctx.close()
             self._main_iter_ctx = None
 
     async def __aiter__(self):
-        async with await self.get_iter_context("rb") as tmp_file:
+        async with self.iterate() as tmp_file:
             async for data in tmp_file:
                 yield data
 
@@ -156,16 +173,12 @@ class Collection(Generic[T]):
         async with aiofiles.open(collection_path, "w") as f:
             await f.write("")
 
-    @final
-    async def _tmp_collection_file(self, mode: Any = "r"):
-        __id = str(uuid4())
-        tmp_path = self._collection_tmp_path_builder(__id)
+    async def copy_main_file(self, dest_path: Path):
+        """Copy the main file to a another file."""
         main_file = self._collection_path_builder()
 
         async with self._main_file_lock:
-            shutil.copyfile(main_file.absolute(), tmp_path.absolute())
-
-        return CollectionIterContext(self._entity_type, tmp_path, mode)
+            shutil.copyfile(main_file.absolute(), dest_path.absolute())
 
     @final
     async def _ensure_collection_exists(self) -> None:
@@ -319,13 +332,16 @@ class Collection(Generic[T]):
             else:
                 os.remove(tmp_path.absolute())
 
-    async def get_iter_context(self, mode: Any = "r") -> CollectionIterContext[T]:
+    def iterate(self) -> CollectionIterContext[T]:
         """Get an iterable context for this collection.
 
         Args:
             mode (`Any`): The mode to open the file with.
         """
-        return await self._tmp_collection_file(mode)
+        __id = str(uuid4())
+        return CollectionIterContext[T](
+            self, self._collection_tmp_path_builder(__id), "rb"
+        )
 
     async def get(self, __id: str):
         """Get an entity by its id.
@@ -334,7 +350,7 @@ class Collection(Generic[T]):
             __id (`str`): The id of the entity.
         """
 
-        async with await self._tmp_collection_file() as tmp_file:
+        async with self.iterate() as tmp_file:
             async for line in tmp_file.iter_lines():
                 if Collection._check_by_id(line, __id):
                     data = deserialize(self._entity_type, json.loads(line))
@@ -382,7 +398,7 @@ class Collection(Generic[T]):
             if isinstance(prop, TProperty):
                 selector = prop.json_property_name or prop.actual_name
 
-        async with await self._tmp_collection_file("rb") as tmp_file:
+        async with self.iterate() as tmp_file:
             async for line in tmp_file.iter_lines():
                 for item in ijson.items(line, selector):
                     if item == __value:
