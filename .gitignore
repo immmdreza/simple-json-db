@@ -5,3 +5,4 @@ __pycache__/
 dummy_*
 __test_db__/
 _test_engine_/
+.pytest_cache/

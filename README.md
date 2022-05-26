@@ -19,13 +19,12 @@ Let's see how you can get started with the package.
 Step #1 is to create a model that represents something like a row in a table.
 
 ```py
-from sjd.entity.properties import IntProperty, StrProperty
-from sjd.entity import TEntity
+from sjd import TEntity, properties as props
 
 class Student(TEntity):
-    student_id = IntProperty(required=True)
-    first_name = StrProperty(required=True)
-    last_name = StrProperty(required=True)
+    student_id = props.IntProperty(required=True)
+    first_name = props.StrProperty(required=True)
+    last_name = props.StrProperty(required=True)
 ```
 
 1. Your model should inherit from `TEntity`.
@@ -36,11 +35,11 @@ class Student(TEntity):
 We have an `Engine` and some `Collection`s. The first one is your database, the second is your table.
 
 ```py
-from sjd.database import Engine, __Collection__
+from sjd import Engine
 
 class AppEngine(Engine):
 
-    students = __Collection__(Student)
+    students = Engine.set(Student)
 
     def __init__(self):
         super().__init__(Path("__test_db__"))
@@ -50,7 +49,7 @@ class AppEngine(Engine):
 1. The engine will create a directory named `__test_db__`.
 2. inside `__test_db__` the collections are stored.
 3. You **SHOULD** pass the type of your entity (`entity_type`) to the `__Collection__`. Here is `Student`.
-4. type `__Collection__` is a descriptor! The actual thing is `Collection`.
+4. `Engine.set()` returns type `__Collection__` which is a descriptor! The actual thing is `Collection`.
 5. The collection name will be class variable's name ( `students` here ).
 
 ### Create engine instance
@@ -94,9 +93,9 @@ Personally, i prefer classes with initializers. so let's add an `__init__` to th
 class Student(TEntity):
     __json_init__ = True
 
-    student_id = IntProperty(required=True)
-    first_name = StrProperty(required=True)
-    last_name = StrProperty()
+    student_id = props.IntProperty(required=True)
+    first_name = props.StrProperty(required=True)
+    last_name = props.StrProperty()
 
     def __init__(self, student_id: int, first_name: str, last_name: str):
         self.student_id = student_id
@@ -138,8 +137,8 @@ async for student in collection:
 Get data with some filters.
 
 ```py
-async for student in collection.as_queryable.where(
-    lambda s: s.last_name == "Doe"
+async for student in engine.students.iter_by_prop_value(
+    lambda s: s.last_name, "Doe"
 ):
     print(student.first_name)
 
@@ -152,8 +151,8 @@ async for student in collection.as_queryable.where(
 Ops they were all "Doe".
 
 ```py
-async for student in collection.as_queryable.where(
-    lambda s: s.first_name == "John"
+async for student in engine.students.iter_by_prop_value(
+    lambda s: s.first_name, "John"
 ):
     print(student.first_name)
 
@@ -164,7 +163,7 @@ If it's going to be one, we have more options.
 
 ```py
 
-student = await collection.as_queryable.first(lambda s: s.first_name == "John")
+student = await collection.get_first(lambda s: s.first_name == "John")
 print(student.first_name)
 
 # John
@@ -204,16 +203,16 @@ Let's begin with creating another model called `Grade` that includes some inform
 Since this model is an embed entity, You should inherit from `EmbedEntity`.
 
 ```py
-from src.entity import TEntity, EmbedEntity
+from sjd import TEntity, EmbedEntity, properties as props
 
 # ---- sniff ----
 
 class Grade(EmbedEntity):
     __json_init__ = True
 
-    course_id = IntProperty(required=True)
-    course_name = StrProperty(required=True)
-    score = IntProperty(required=True)
+    course_id = props.IntProperty(required=True)
+    course_name = props.StrProperty(required=True)
+    score = props.IntProperty(required=True)
 
     def __init__(self, course_id: int, course_name: str, score: int):
         self.course_id = course_id
@@ -226,17 +225,16 @@ To add this as a new property to the `Student`, we'll use `ComplexProperty`. ( O
 Your `Student` class should looks like this:
 
 ```py
-from src.entity.properties import IntProperty, StrProperty, OptionalComplexProperty
 
 # ---- sniff ----
 
 class Student(TEntity):
     __json_init__ = True
 
-    student_id = IntProperty(required=True)
-    first_name = StrProperty(required=True)
-    last_name = StrProperty()
-    grade = OptionalComplexProperty(Grade)
+    student_id = props.IntProperty(required=True)
+    first_name = props.StrProperty(required=True)
+    last_name = props.StrProperty()
+    grade = props.OptionalComplexProperty(Grade)
 
     def __init__(
         self,
@@ -264,7 +262,7 @@ async for student in collection:
 Let's check if it's working
 
 ```py
-jill = await collection.as_queryable.first(lambda s: s.first_name == "Jill")
+jill = await collection.get_first(lambda s: s.first_name == "Jill")
     if jill.grade:
         print(jill.grade.course_name, jill.grade.score)
 
@@ -276,17 +274,16 @@ jill = await collection.as_queryable.first(lambda s: s.first_name == "Jill")
 As we all know, there may be more than one course per student! Then the grade property, can be grades.
 
 ```py
-from src.entity.properties import IntProperty, StrProperty, ListProperty
 
 # ---- sniff ----
 
 class Student(TEntity):
     __json_init__ = True
 
-    student_id = IntProperty(required=True)
-    first_name = StrProperty(required=True)
-    last_name = StrProperty()
-    grades = ListProperty(Grade, default_factory=list)
+    student_id = props.IntProperty(required=True)
+    first_name = props.StrProperty(required=True)
+    last_name = props.StrProperty()
+    grades = props.ListProperty(Grade, default_factory=list)
 
     def __init__(
         self,
@@ -315,7 +312,7 @@ async for student in collection:
 Let's change Jill's english score to 50.
 
 ```py
-jill = await collection.as_queryable.first(lambda s: s.first_name == "Jill")
+jill = await collection.get_first(lambda s: s.first_name == "Jill")
 if jill.grades:
     jill.grades[-1].score = 50
     await collection.update(jill)
@@ -324,9 +321,11 @@ if jill.grades:
 Oh who's score was 50 ??!
 
 ```py
-with_50_score = await collection.as_queryable.where(
-    lambda s: any(x.score == 50 for x in s.grades)).single()
-print(with_50_score.first_name)
+async with collection as iter_ctx:
+
+    with_50_score = await iter_ctx.as_queryable.where(
+        lambda s: any(x.score == 50 for x in s.grades)).single()
+    print(with_50_score.first_name)
 ```
 
 ### Getting data ( Fast way )
@@ -341,6 +340,10 @@ There are two methods that are probably faster than `as_queryable` way.
 
     Use this to do an `async iterate` over all entities with `entity[__prop] == __value`.
     We use this to work with virtual objects.
+
+3. `get_first(__prop: str, __value: Any)`
+
+    Just like 2, but returns the first.
 
 ```py
 async for student in engine.students.iter_by_prop_value("first_name", "Jill"):
@@ -371,16 +374,14 @@ Since the `Grade` is going to be a separate entity, we should add it to our `App
     ```py
     # ---- sniff ----
 
-    from sjd.entity.properties import VirtualListProperty
-
     class Student(TEntity):
         __json_init__ = True
 
-        student_id = IntProperty(required=True)
-        first_name = StrProperty(required=True)
-        last_name = StrProperty()
+        student_id = props.IntProperty(required=True)
+        first_name = props.StrProperty(required=True)
+        last_name = props.StrProperty()
 
-        grades = VirtualListProperty(Grade, "student_id")
+        grades = props.VirtualListProperty(Grade, "student_id")
 
         def __init__(
             self,
@@ -405,16 +406,14 @@ Since the `Grade` is going to be a separate entity, we should add it to our `App
     ```py
     # ---- sniff ----
 
-    from sjd.entity.properties import ReferenceProperty
-
     class Grade(TEntity):
         __json_init__ = True
 
-        course_id = IntProperty(required=True)
-        course_name = StrProperty(required=True)
-        score = IntProperty(required=True)
+        course_id = props.IntProperty(required=True)
+        course_name = props.StrProperty(required=True)
+        score = props.IntProperty(required=True)
 
-        student_id = ReferenceProperty()
+        student_id = props.ReferenceProperty()
 
         def __init__(self, course_id: int, course_name: str, score: int):
             self.course_id = course_id
@@ -431,8 +430,8 @@ Since the `Grade` is going to be a separate entity, we should add it to our `App
     ```py
     class AppEngine(Engine):
 
-        students = __Collection__(Student)
-        grades = __Collection__(Grade)
+        students = Engine.set(Student)
+        grades = Engine.set(Grade)
 
         def __init__(self):
             super().__init__("__test_db__")
@@ -453,7 +452,7 @@ Since the `Grade` is going to be a separate entity, we should add it to our `App
     If you try getting one of your students now, you'll see the `grades` property is an empty list.
 
     ```py
-    arash = await engine.students.as_queryable.first(
+    arash = await engine.students.get_first(
         lambda s: s.first_name == "Arash"
     )
     print(arash.grades)

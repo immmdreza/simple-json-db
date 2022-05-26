@@ -16,6 +16,7 @@ from typing import (
     final,
     overload,
 )
+from uuid import uuid4
 
 import ijson  # type: ignore
 import aiofiles
@@ -37,25 +38,41 @@ if TYPE_CHECKING:
 _T = TypeVar("_T")
 
 
-class _TempCollectionFile(AsyncIterable[str]):
-    def __init__(self, file_path: Path, mode: Any = "r") -> None:
+class CollectionIterContext(Generic[T], AsyncIterable[T]):
+    def __init__(self, entity_type: type[T], file_path: Path, mode: Any = "r") -> None:
+        self._entity_type = entity_type
         self._file_path = file_path
         self._mode = mode
         self._file = None
 
     async def __aiter__(self):
-        async with aiofiles.open(self._file_path, self._mode) as tmp_file:
-            self._file = tmp_file
-            async for line in tmp_file:
-                yield line
+        async for line in self.iter_lines():
+            obj = deserialize(self._entity_type, json.loads(line))
+            if obj is not None:
+                yield obj
 
     async def __aenter__(self):
         return self
 
     async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any):
+        await self.close()
+
+    async def iter_lines(self) -> AsyncGenerator[str, None]:
+        async with aiofiles.open(self._file_path, self._mode) as tmp_file:
+            self._file = tmp_file
+            async for line in tmp_file:
+                yield line
+
+    async def close(self):
         if self._file is not None:
             await self._file.close()
         os.remove(self._file_path)
+
+    @final
+    @property
+    def as_queryable(self) -> AsyncQueryable[T]:
+        """Get a queryable object for this collection."""
+        return AsyncQueryable(self)
 
 
 class Collection(Generic[T]):
@@ -87,8 +104,22 @@ class Collection(Generic[T]):
             )
 
         self._entity_type: type[T] = entity_type  # type: ignore
-        self._instance_numbers = 1
         self._main_file_lock = asyncio.Lock()
+        self._main_iter_ctx: Optional[CollectionIterContext[T]] = None
+
+    async def __aenter__(self):
+        self._main_iter_ctx = await self.get_iter_context()
+        return self._main_iter_ctx
+
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any):
+        if self._main_iter_ctx is not None:
+            await self._main_iter_ctx.close()
+            self._main_iter_ctx = None
+
+    async def __aiter__(self):
+        async with await self.get_iter_context("rb") as tmp_file:
+            async for data in tmp_file:
+                yield data
 
     @final
     @property
@@ -102,12 +133,6 @@ class Collection(Generic[T]):
         """Get the type of the entity."""
         return self._entity_type
 
-    @final
-    @property
-    def as_queryable(self) -> AsyncQueryable[T]:
-        """Get a queryable object for this collection."""
-        return AsyncQueryable(self)
-
     @staticmethod
     def _check_by_id(line_of: str, __id: str) -> bool:
         return line_of[10:46] == __id
@@ -117,8 +142,8 @@ class Collection(Generic[T]):
         return self._engine.get_base_path(self) / self._name
 
     @final
-    def _collection_tmp_path_builder(self, instance_number: int):
-        return self._engine.get_base_path(self) / f"__{self._name}_{instance_number}__"
+    def _collection_tmp_path_builder(self, __id: Optional[str] = None):
+        return self._engine.get_base_path(self) / f"__{self._name}_{__id}__"
 
     @final
     def _collection_exists(self) -> bool:
@@ -133,24 +158,14 @@ class Collection(Generic[T]):
 
     @final
     async def _tmp_collection_file(self, mode: Any = "r"):
-        tmp_path = self._collection_tmp_path_builder(self._instance_numbers)
+        __id = str(uuid4())
+        tmp_path = self._collection_tmp_path_builder(__id)
         main_file = self._collection_path_builder()
 
         async with self._main_file_lock:
             shutil.copyfile(main_file.absolute(), tmp_path.absolute())
 
-        self._instance_numbers += 1
-        async with _TempCollectionFile(tmp_path, mode) as tmp_file:
-            async for line in tmp_file:
-                yield line
-        self._instance_numbers -= 1
-
-    @final
-    async def __aiter__(self):
-        async for line in self._tmp_collection_file():
-            data = deserialize(self._entity_type, json.loads(line))
-            if data is not None:
-                yield data
+        return CollectionIterContext(self._entity_type, tmp_path, mode)
 
     @final
     async def _ensure_collection_exists(self) -> None:
@@ -242,7 +257,7 @@ class Collection(Generic[T]):
 
         async with self._main_file_lock:
             file_path = self._collection_path_builder()
-            tmp_path = self._collection_tmp_path_builder(0)
+            tmp_path = self._collection_tmp_path_builder()
             modified = False
             async with aiofiles.open(file_path, "r") as f:
                 async with aiofiles.open(tmp_path, "w") as tmp_f:
@@ -278,7 +293,7 @@ class Collection(Generic[T]):
 
         async with self._main_file_lock:
             file_path = self._collection_path_builder()
-            tmp_path = self._collection_tmp_path_builder(0)
+            tmp_path = self._collection_tmp_path_builder()
             modified = False
             async with aiofiles.open(file_path, "r") as f:
                 async with aiofiles.open(tmp_path, "w") as tmp_f:
@@ -304,6 +319,14 @@ class Collection(Generic[T]):
             else:
                 os.remove(tmp_path.absolute())
 
+    async def get_iter_context(self, mode: Any = "r") -> CollectionIterContext[T]:
+        """Get an iterable context for this collection.
+
+        Args:
+            mode (`Any`): The mode to open the file with.
+        """
+        return await self._tmp_collection_file(mode)
+
     async def get(self, __id: str):
         """Get an entity by its id.
 
@@ -311,10 +334,11 @@ class Collection(Generic[T]):
             __id (`str`): The id of the entity.
         """
 
-        async for line in self._tmp_collection_file():
-            if Collection._check_by_id(line, __id):
-                data = deserialize(self._entity_type, json.loads(line))
-                return data
+        async with await self._tmp_collection_file() as tmp_file:
+            async for line in tmp_file.iter_lines():
+                if Collection._check_by_id(line, __id):
+                    data = deserialize(self._entity_type, json.loads(line))
+                    return data
         return None
 
     @overload
@@ -332,7 +356,7 @@ class Collection(Generic[T]):
 
     @overload
     def iter_by_prop_value(
-        self, selector: Callable[[type[T]], Any], __value: Any, /
+        self, selector: Callable[[type[T]], _T], __value: _T, /
     ) -> AsyncGenerator[T, None]:
         """Iterate over all entities that have a certain property value.
 
@@ -343,7 +367,7 @@ class Collection(Generic[T]):
         ...
 
     async def iter_by_prop_value(
-        self, selector: str | Callable[[type[T]], Any], __value: Any, /
+        self, selector: str | Callable[[type[T]], _T], __value: _T, /
     ) -> AsyncGenerator[T, None]:
         """Iterate over all entities that have a certain property value.
 
@@ -358,13 +382,14 @@ class Collection(Generic[T]):
             if isinstance(prop, TProperty):
                 selector = prop.json_property_name or prop.actual_name
 
-        async for line in self._tmp_collection_file("rb"):
-            for item in ijson.items(line, selector):
-                if item == __value:
-                    data = deserialize(self._entity_type, json.loads(line))
-                    if data is not None:
-                        yield data
-                    break
+        async with await self._tmp_collection_file("rb") as tmp_file:
+            async for line in tmp_file.iter_lines():
+                for item in ijson.items(line, selector):
+                    if item == __value:
+                        data = deserialize(self._entity_type, json.loads(line))
+                        if data is not None:
+                            yield data
+                        break
 
     @overload
     def get_first(
@@ -375,13 +400,13 @@ class Collection(Generic[T]):
 
     @overload
     def get_first(
-        self, selector: Callable[[type[T]], Any], __value: Any
+        self, selector: Callable[[type[T]], _T], __value: _T
     ) -> Coroutine[Any, Any, Optional[T]]:
         """Get the first entity that has a certain property value."""
         ...
 
     async def get_first(
-        self, selector: str | Callable[[type[T]], Any], __value: Any
+        self, selector: str | Callable[[type[T]], _T], __value: _T
     ) -> Optional[T]:
         """Get the first entity that has a certain property value."""
 
@@ -460,15 +485,19 @@ class Collection(Generic[T]):
         await self._ensure_collection_exists()
         await self._update_async(query, one=False)
 
-    async def add(self, entity: T) -> None:
+    async def add(self, entity: T) -> T:
         """Add an entity to the collection.
 
         Args:
             entity (`T`): The entity to add to the collection.
+
+        Returns:
+            `T`: The entity that was added.
         """
 
         await self._ensure_collection_exists()
         await self._add_to_file_async(entity)
+        return entity
 
     async def add_many(self, *entities: T) -> None:
         """Add multiple entities to the collection."""
@@ -536,3 +565,13 @@ class Collection(Generic[T]):
     def purge(self):
         """Purge the collection."""
         os.remove(self._collection_path_builder().absolute())
+
+    async def count(self) -> int:
+        """Count the number of entities in the collection."""
+
+        await self._ensure_collection_exists()
+        async with self as iter_ctx:
+            count = 0
+            async for _ in iter_ctx.iter_lines():
+                count += 1
+            return count

@@ -57,10 +57,13 @@ async def main():
         Student(1, "Arash", "Eshi", [Grade(1, "Physics", 20)]),
     )
 
-    arash = await engine.students.as_queryable.first(lambda s: s.first_name == "Arash")
+    arash = await engine.students.get_first(lambda s: s.first_name, "Arash")
 
-    async for grade in engine.students.iter_referenced_by(arash, lambda s: s.grades):
-        print(grade.course_name)
+    if arash:
+        async for grade in engine.students.iter_referenced_by(
+            arash, lambda s: s.grades
+        ):
+            print(grade.course_name)
 
 
 if __name__ == "__main__":
