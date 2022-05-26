@@ -6,6 +6,10 @@ This package maps your python objects to json and then you can save, get, modify
 
 _This package is for tiny and simple projects. with a low amount of data._
 
+## Installation
+
+The package is available at [PYPI](https://pypi.org/project/json-entity).
+
 ## Intro
 
 Let's see how you can get started with the package.

@@ -112,3 +112,9 @@ class Engine(ABC):
         if entity_type not in self.__collections:
             return None
         return self.__collections[entity_type]
+
+    def purge(self) -> None:
+        """Purges the engine."""
+        for collection in self.__collections.values():
+            collection.purge()
+        self._base_path.rmdir()

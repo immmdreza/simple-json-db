@@ -521,3 +521,7 @@ class Collection(Generic[T]):
                     yield item  # type: ignore
         else:
             raise TypeError("Entity should be an instance of TEntity.")
+
+    def purge(self):
+        """Purge the collection."""
+        os.remove(self._collection_path_builder().absolute())
