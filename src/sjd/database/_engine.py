@@ -9,7 +9,7 @@ from ._collection import Collection
 
 
 class __Collection__(Generic[T]):
-    """This is a descriptor of Collection."""
+    """This is a descriptor of Collection. Can only be used in an engine class as `ClassVar`."""
 
     def __init__(self, entity_type: type[T]) -> None:
         """This is a descriptor of Collection."""
@@ -70,16 +70,33 @@ class CollectionNotRegistered(Exception):
 
 
 class Engine(ABC):
+    """Initializes the engine.
+
+    Base of everything that you gonna use, Should be used as base class of your engine"""
+
     @overload
     def __init__(self, base_path: Path):
+        """Initializes the engine.
+
+        Base of everything that you gonna use, Should be used as base class of your engine
+
+        Args:
+            base_path (`Path`): The base path of the engine.
+        """
         ...
 
     @overload
     def __init__(self, base_path: str):
+        """Initializes the engine.
+
+        Base of everything that you gonna use, Should be used as base class of your engine
+
+        Args:
+            base_path (`str`): The base path of the engine.
+        """
         ...
 
     def __init__(self, base_path: Path | str):
-
         if isinstance(base_path, str):
             self._base_path = Path(base_path)
         else:
@@ -106,6 +123,15 @@ class Engine(ABC):
 
     @final
     def get_base_path(self, collection: Collection[Any]) -> Path:
+        """Returns the base path of the engine.
+
+        Args:
+            collection (`Collection[Any]`): The collection that requested the path.
+
+        Returns:
+            `Path`: The base path of the engine.
+        """
+
         if not self.__initialized:
             raise EngineNotInitialized()
 
@@ -117,6 +143,17 @@ class Engine(ABC):
 
     @final
     def get_collection(self, entity_type: type[T]) -> Optional[Collection[T]]:
+        """Returns the collection of the entity type.
+
+        Args:
+            entity_type (`type[T]`): The entity type of the collection.
+
+        Raises:
+            `EngineNotInitialized`: If the engine is not initialized.
+
+        Returns:
+            `Optional[Collection[T]]`: The collection of the entity type. `None` if not found.
+        """
         if not self.__initialized:
             raise EngineNotInitialized()
         if entity_type not in self.__collections:
@@ -130,8 +167,41 @@ class Engine(ABC):
             collection.purge()
         self._base_path.rmdir()
 
+    def register_collection(
+        self, entity_type: type[T], name: Optional[str] = None, /
+    ) -> Collection[T]:
+        """Manually registers a collection.
+
+        Args:
+            entity_type (`type[T]`): The entity type of the collection.
+            name (`Optional[str]`, optional): The name of the collection. Defaults to `Type.__name__`.
+
+        Raises:
+            `EngineNotInitialized`: If the engine is not initialized.
+            `CollectionEntityTypeDuplicated`: If the entity type is already registered.
+
+        Returns:
+            `Collection[T]`: The registered collection.
+        """
+        if not self.__initialized:
+            raise EngineNotInitialized()
+        if entity_type in self.__collections:
+            raise CollectionEntityTypeDuplicated(
+                name or entity_type.__name__, entity_type
+            )
+        col = Collection(self, entity_type, name)
+        self.__collections[entity_type] = col
+        return col
+
     @final
     @staticmethod
-    def register_collection(entity_type: type[T]) -> __Collection__[T]:
-        """Registers a collection."""
+    def set(entity_type: type[T]) -> __Collection__[T]:
+        """Sets a collection (staticmethod).
+
+        Args:
+            entity_type (`type[T]`): The entity type of the collection.
+
+        Returns:
+            `__Collection__[T]`: The descriptor of the collection. can only be used as an engine's `ClassVar`.
+        """
         return __Collection__(entity_type)

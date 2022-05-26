@@ -4,3 +4,4 @@ __pycache__/
 .vscode/
 dummy_*
 __test_db__/
+_test_engine_/

@@ -42,8 +42,8 @@ class Student(TEntity):
 
 class AppEngine(Engine):
 
-    students = Engine.register_collection(Student)
-    grades = Engine.register_collection(Grade)
+    students = Engine.set(Student)
+    grades = Engine.set(Grade)
 
     def __init__(self):
         super().__init__("__test_db__")

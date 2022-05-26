@@ -40,7 +40,7 @@ class Student(TEntity):
 
 class AppEngine(Engine):
 
-    students = Engine.register_collection(Student)
+    students = Engine.set(Student)
 
     def __init__(self):
         super().__init__(Path("__test_db__"))

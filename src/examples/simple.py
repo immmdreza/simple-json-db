@@ -21,7 +21,7 @@ class Student(TEntity):
 class AppEngine(Engine):
 
     # Add a collection which is for model Student
-    students = Engine.register_collection(Student)
+    students = Engine.set(Student)
 
     def __init__(self):
         super().__init__("__test_db__")

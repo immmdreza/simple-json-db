@@ -143,7 +143,7 @@ class Collection(Generic[T]):
         async with _TempCollectionFile(tmp_path, mode) as tmp_file:
             async for line in tmp_file:
                 yield line
-            self._instance_numbers -= 1
+        self._instance_numbers -= 1
 
     @final
     async def __aiter__(self):

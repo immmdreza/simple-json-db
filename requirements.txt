@@ -1,2 +1,4 @@
 aiofiles
 ijson
+pytest
+pytest-asyncio
