@@ -90,16 +90,19 @@ class Collection(Generic[T]):
         self._instance_numbers = 1
         self._main_file_lock = asyncio.Lock()
 
+    @final
     @property
     def name(self) -> str:
         """Get the name of the collection."""
         return self._name
 
+    @final
     @property
     def entity_type(self) -> type[T]:
         """Get the type of the entity."""
         return self._entity_type
 
+    @final
     @property
     def as_queryable(self) -> AsyncQueryable[T]:
         """Get a queryable object for this collection."""
@@ -111,11 +114,11 @@ class Collection(Generic[T]):
 
     @final
     def _collection_path_builder(self):
-        return self._engine.base_path / self._name
+        return self._engine.get_base_path(self) / self._name
 
     @final
     def _collection_tmp_path_builder(self, instance_number: int):
-        return self._engine.base_path / f"__{self._name}_{instance_number}__"
+        return self._engine.get_base_path(self) / f"__{self._name}_{instance_number}__"
 
     @final
     def _collection_exists(self) -> bool:
@@ -128,6 +131,7 @@ class Collection(Generic[T]):
         async with aiofiles.open(collection_path, "w") as f:
             await f.write("")
 
+    @final
     async def _tmp_collection_file(self, mode: Any = "r"):
         tmp_path = self._collection_tmp_path_builder(self._instance_numbers)
         main_file = self._collection_path_builder()
@@ -141,17 +145,20 @@ class Collection(Generic[T]):
                 yield line
             self._instance_numbers -= 1
 
+    @final
     async def __aiter__(self):
         async for line in self._tmp_collection_file():
             data = deserialize(self._entity_type, json.loads(line))
             if data is not None:
                 yield data
 
+    @final
     async def _ensure_collection_exists(self) -> None:
         async with self._main_file_lock:
             if not self._collection_exists():
                 await self._create_collection()
 
+    @final
     async def _manage_referral_properties(self, entity: TEntity):
         for prop in entity.get_properties():
             if isinstance(prop, (VirtualComplexProperty, VirtualListProperty)):
@@ -182,6 +189,7 @@ class Collection(Generic[T]):
                             f"No ReferenceProperty found for {prop.refers_to}."
                         )
 
+    @final
     async def _add_to_file_async(self, entity: T) -> None:
 
         if not isinstance(entity, self._entity_type):
@@ -198,6 +206,7 @@ class Collection(Generic[T]):
                 data = json.dumps(serialize(entity))
                 await f.write(data + "\n")
 
+    @final
     async def _add_many_to_file_async(self, *entities: T) -> None:
 
         for e in entities:
@@ -220,6 +229,7 @@ class Collection(Generic[T]):
                     data = json.dumps(serialize(entity))
                     await f.write(data + "\n")
 
+    @final
     async def _update_async(
         self,
         query: Callable[[type[T]], bool],
@@ -260,6 +270,7 @@ class Collection(Generic[T]):
             else:
                 os.remove(tmp_path.absolute())
 
+    @final
     async def _update_entity_async(self, entity: T, delete: bool = False) -> None:
 
         if not isinstance(entity, self._entity_type):

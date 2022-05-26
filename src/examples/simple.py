@@ -1,7 +1,7 @@
 import asyncio
 from typing import Optional
 
-from sjd import TEntity, Engine, __Collection__, properties as props
+from sjd import TEntity, Engine, properties as props
 
 
 # Create a model to store.
@@ -21,7 +21,7 @@ class Student(TEntity):
 class AppEngine(Engine):
 
     # Add a collection which is for model Student
-    students = __Collection__(Student)
+    students = Engine.register_collection(Student)
 
     def __init__(self):
         super().__init__("__test_db__")

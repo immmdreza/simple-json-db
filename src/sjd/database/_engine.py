@@ -62,6 +62,13 @@ class CollectionEntityTypeDuplicated(Exception):
         )
 
 
+class CollectionNotRegistered(Exception):
+    def __init__(self, collection_name: str) -> None:
+        super().__init__(
+            f"Collection {collection_name} is not registered. Did you done something wired?"
+        )
+
+
 class Engine(ABC):
     @overload
     def __init__(self, base_path: Path):
@@ -78,7 +85,7 @@ class Engine(ABC):
         else:
             self._base_path = base_path
 
-        self._initialize_path(self._base_path)
+        self.__initialize_path(self._base_path)
         self.__collections: dict[type[Any], Collection[Any]] = {}
         self.__set_collections()
         self.__initialized = True
@@ -93,15 +100,18 @@ class Engine(ABC):
                 collection = Collection(self, col.entity_type, col.collection_name)  # type: ignore
                 self.__collections[col.entity_type] = collection  #  type: ignore
 
-    def _initialize_path(self, path: Path):
+    def __initialize_path(self, path: Path):
         if not path.exists():
             path.mkdir(parents=True)
 
     @final
-    @property
-    def base_path(self) -> Path:
+    def get_base_path(self, collection: Collection[Any]) -> Path:
         if not self.__initialized:
             raise EngineNotInitialized()
+
+        if collection.entity_type not in self.__collections:
+            raise CollectionNotRegistered(collection.name)
+
         """Returns the base path of the engine."""
         return self._base_path
 
@@ -113,8 +123,15 @@ class Engine(ABC):
             return None
         return self.__collections[entity_type]
 
+    @final
     def purge(self) -> None:
         """Purges the engine."""
         for collection in self.__collections.values():
             collection.purge()
         self._base_path.rmdir()
+
+    @final
+    @staticmethod
+    def register_collection(entity_type: type[T]) -> __Collection__[T]:
+        """Registers a collection."""
+        return __Collection__(entity_type)

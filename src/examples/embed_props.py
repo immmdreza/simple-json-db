@@ -1,17 +1,15 @@
 import asyncio
 from pathlib import Path
 
-from sjd.database import Engine, __Collection__
-from sjd.entity import TEntity, EmbedEntity
-from sjd.entity.properties import IntProperty, StrProperty, ListProperty
+from sjd import TEntity, EmbedEntity, Engine, properties as props
 
 
 class Grade(EmbedEntity):
     __json_init__ = True
 
-    course_id = IntProperty(required=True)
-    course_name = StrProperty(required=True)
-    score = IntProperty(required=True)
+    course_id = props.IntProperty(required=True)
+    course_name = props.StrProperty(required=True)
+    score = props.IntProperty(required=True)
 
     def __init__(self, course_id: int, course_name: str, score: int):
         self.course_id = course_id
@@ -22,10 +20,10 @@ class Grade(EmbedEntity):
 class Student(TEntity):
     __json_init__ = True
 
-    student_id = IntProperty(required=True)
-    first_name = StrProperty(required=True)
-    last_name = StrProperty()
-    grades = ListProperty(Grade, default_factory=list)
+    student_id = props.IntProperty(required=True)
+    first_name = props.StrProperty(required=True)
+    last_name = props.StrProperty()
+    grades = props.ListProperty(Grade, default_factory=list)
 
     def __init__(
         self,
@@ -42,7 +40,7 @@ class Student(TEntity):
 
 class AppEngine(Engine):
 
-    students = __Collection__(Student)
+    students = Engine.register_collection(Student)
 
     def __init__(self):
         super().__init__(Path("__test_db__"))
