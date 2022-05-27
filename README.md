@@ -16,6 +16,8 @@ Let's see how you can get started with the package.
 
 See also our [Wiki](https://github.com/immmdreza/simple-json-db/wiki).
 
+You can take a look at [src/examples](src/examples), if you're not on reading mode.
+
 ### Create Model
 
 Step #1 is to create a model that represents something like a row in a table.
