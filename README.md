@@ -8,7 +8,7 @@ _This package is for tiny and simple projects. with a low amount of data._
 
 ## Installation
 
-The package is available at [PYPI](https://pypi.org/project/json-entity).
+The package is available at [PYPI](https://pypi.org/project/json-entity) as json-entity.
 
 ## Intro
 
