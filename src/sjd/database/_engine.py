@@ -1,7 +1,7 @@
 import inspect
 
 from pathlib import Path
-from typing import Any, Generic, Optional, TypeVar, final, overload
+from typing import Any, Generic, Optional, TypeVar, cast, final, overload
 
 from ..entity import TEntity
 from ..serialization._shared import T
@@ -42,10 +42,13 @@ class __Collection__(Generic[T]):
     ) -> "__Collection__[T]" | AbstractCollection[T]:
         if obj is None:
             return self
-        return obj.get_collection(self._entity_type)  # type: ignore
+        col = cast("Engine", obj).get_collection(self._entity_type)
+        if col is None:
+            raise AttributeError(f"Can't get such collection {self._entity_type}")
+        return col
 
     def __set__(self, obj: object, value: T) -> None:
-        raise AttributeError("can't set attribute")
+        raise AttributeError("Engine collections are read-only.")
 
 
 _TCol = TypeVar("_TCol", bound=AbstractCollection[Any])
@@ -85,7 +88,12 @@ class __Typed_Collection__(Generic[T, _TCol]):
     ) -> "__Typed_Collection__[T, _TCol]" | _TCol:
         if obj is None:
             return self
-        return obj.get_collection(self._entity_type)  # type: ignore
+        t_col = cast("Engine", obj).get_collection(self._entity_type)
+        if t_col is None:
+            raise AttributeError(
+                f"Can't get such typed collection {self._entity_type}, {self._collection_type}"
+            )
+        return cast(_TCol, t_col)
 
     def __set__(self, obj: object, value: T) -> None:
         raise AttributeError("can't set attribute")
@@ -155,7 +163,7 @@ class Engine:
             if isinstance(col, __Collection__):
                 self.register_collection(col.entity_type, col.collection_name)  # type: ignore
             elif isinstance(col, __Typed_Collection__):
-                self.register_typed_collections(col.collection_type)
+                self.register_typed_collection(col.collection_type)
 
     def __initialize_path(self, path: Path):
         if not path.exists():
@@ -233,7 +241,7 @@ class Engine:
         self.__collections[entity_type] = col
         return col
 
-    def register_typed_collections(
+    def register_typed_collection(
         self, collection: type[AbstractCollection[T]]
     ) -> AbstractCollection[T]:
         if not self.__initialized:
