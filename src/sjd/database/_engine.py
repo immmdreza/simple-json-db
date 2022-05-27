@@ -1,11 +1,11 @@
-from abc import ABC
 import inspect
 
 from pathlib import Path
-from typing import Any, Generic, Optional, final, overload
+from typing import Any, Generic, Optional, TypeVar, final, overload
 
+from ..entity import TEntity
 from ..serialization._shared import T
-from ._collection import Collection
+from ._collection import AbstractCollection, Collection
 
 
 class __Collection__(Generic[T]):
@@ -34,12 +34,55 @@ class __Collection__(Generic[T]):
         ...
 
     @overload
-    def __get__(self, obj: object, objtype: type[object]) -> Collection[T]:
+    def __get__(self, obj: object, objtype: type[object]) -> AbstractCollection[T]:
         ...
 
     def __get__(
         self, obj: object | None, objtype: type[object] | None = None
-    ) -> "__Collection__[T]" | Collection[T]:
+    ) -> "__Collection__[T]" | AbstractCollection[T]:
+        if obj is None:
+            return self
+        return obj.get_collection(self._entity_type)  # type: ignore
+
+    def __set__(self, obj: object, value: T) -> None:
+        raise AttributeError("can't set attribute")
+
+
+_TCol = TypeVar("_TCol", bound=AbstractCollection[Any])
+
+
+class __Typed_Collection__(Generic[T, _TCol]):
+    """This is a descriptor of Typed Collection. Can only be used in an engine class as `ClassVar`."""
+
+    def __init__(
+        self, entity_type: type[T], collection_type: type[AbstractCollection[T]]
+    ) -> None:
+        """This is a descriptor of Collection."""
+        super().__init__()
+        self._collection_type = collection_type
+        self._entity_type = entity_type
+
+    @final
+    @property
+    def collection_type(self):
+        return self._collection_type
+
+    @final
+    @property
+    def entity_type(self) -> type[T]:
+        return self._entity_type
+
+    @overload
+    def __get__(self, obj: None, objtype: None) -> "__Typed_Collection__[T, _TCol]":
+        ...
+
+    @overload
+    def __get__(self, obj: object, objtype: type[object]) -> _TCol:
+        ...
+
+    def __get__(
+        self, obj: object | None, objtype: type[object] | None = None
+    ) -> "__Typed_Collection__[T, _TCol]" | _TCol:
         if obj is None:
             return self
         return obj.get_collection(self._entity_type)  # type: ignore
@@ -69,49 +112,35 @@ class CollectionNotRegistered(Exception):
         )
 
 
-class Engine(ABC):
+class Engine:
     """Initializes the engine.
 
     Base of everything that you gonna use, Should be used as base class of your engine"""
 
-    @overload
-    def __init__(self, base_path: Path):
-        """Initializes the engine.
-
-        Base of everything that you gonna use, Should be used as base class of your engine
-
-        Args:
-            base_path (`Path`): The base path of the engine.
-        """
-        ...
-
-    @overload
-    def __init__(self, base_path: str):
-        """Initializes the engine.
-
-        Base of everything that you gonna use, Should be used as base class of your engine
-
-        Args:
-            base_path (`str`): The base path of the engine.
-        """
-        ...
-
     def __init__(self, base_path: Path | str):
+        """Initializes the engine.
+
+        Base of everything that you gonna use, Should be used as base class of your engine
+
+        Args:
+            base_path (`Path` | `str`): The base path of the engine.
+        """
+
         if isinstance(base_path, str):
             self._base_path = Path(base_path)
         else:
             self._base_path = base_path
 
-        self.__initialize_path(self._base_path)
-        self.__collections: dict[type[Any], Collection[Any]] = {}
-        self.__set_collections()
         self.__initialized = True
+        self.__initialize_path(self._base_path)
+        self.__collections: dict[type[Any], AbstractCollection[Any]] = {}
+        self.__set_collections()
 
     def __setitem__(self, name: str, entity_type: type[Any]) -> None:
         """Manually registers a collection."""
         self.register_collection(entity_type, name)
 
-    def __getitem__(self, entity_type: type[T]) -> Collection[T]:
+    def __getitem__(self, entity_type: type[T]) -> AbstractCollection[T]:
         """Gets a collection by entity type.
 
         Args:
@@ -124,19 +153,16 @@ class Engine(ABC):
     def __set_collections(self):
         for _, col in inspect.getmembers(type(self)):
             if isinstance(col, __Collection__):
-                if col.entity_type in self.__collections:  # type: ignore
-                    raise CollectionEntityTypeDuplicated(
-                        col.collection_name, col.entity_type  # type: ignore
-                    )
-                collection = Collection(self, col.entity_type, col.collection_name)  # type: ignore
-                self.__collections[col.entity_type] = collection  #  type: ignore
+                self.register_collection(col.entity_type, col.collection_name)  # type: ignore
+            elif isinstance(col, __Typed_Collection__):
+                self.register_typed_collections(col.collection_type)
 
     def __initialize_path(self, path: Path):
         if not path.exists():
             path.mkdir(parents=True)
 
     @final
-    def get_base_path(self, collection: Collection[Any]) -> Path:
+    def get_base_path(self, collection: AbstractCollection[Any]) -> Path:
         """Returns the base path of the engine.
 
         Args:
@@ -156,7 +182,7 @@ class Engine(ABC):
         return self._base_path
 
     @final
-    def get_collection(self, entity_type: type[T]) -> Optional[Collection[T]]:
+    def get_collection(self, entity_type: type[T]) -> Optional[AbstractCollection[T]]:
         """Returns the collection of the entity type.
 
         Args:
@@ -183,7 +209,7 @@ class Engine(ABC):
 
     def register_collection(
         self, entity_type: type[T], name: Optional[str] = None, /
-    ) -> Collection[T]:
+    ) -> AbstractCollection[T]:
         """Manually registers a collection.
 
         Args:
@@ -207,6 +233,22 @@ class Engine(ABC):
         self.__collections[entity_type] = col
         return col
 
+    def register_typed_collections(
+        self, collection: type[AbstractCollection[T]]
+    ) -> AbstractCollection[T]:
+        if not self.__initialized:
+            raise EngineNotInitialized()
+
+        col = collection(self)
+
+        if col.entity_type is None or not issubclass(col.entity_type, TEntity):  # type: ignore
+            raise ValueError("entity_type must be a TEntity.")
+
+        if col.entity_type in self.__collections:
+            raise CollectionEntityTypeDuplicated(col.name, col.entity_type)
+        self.__collections[col.entity_type] = col
+        return col
+
     @final
     @staticmethod
     def set(entity_type: type[T]) -> __Collection__[T]:
@@ -219,3 +261,19 @@ class Engine(ABC):
             `__Collection__[T]`: The descriptor of the collection. can only be used as an engine's `ClassVar`.
         """
         return __Collection__[T](entity_type)
+
+    @final
+    @staticmethod
+    def typed_set(
+        entity_type: type[T], collection_type: type[_TCol]
+    ) -> __Typed_Collection__[T, _TCol]:
+        """Sets a typed collection (staticmethod).
+
+        Args:
+            entity_type (`type[T]`): The entity type of the collection.
+            collection_type (`type[_TCol]`): The type of your collection.
+
+        Returns:
+            `__Typed_Collection__[T, _TCol]`: The descriptor of the collection. can only be used as an engine's `ClassVar`.
+        """
+        return __Typed_Collection__[T, _TCol](entity_type, collection_type)

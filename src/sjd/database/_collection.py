@@ -1,3 +1,4 @@
+from abc import abstractmethod
 import asyncio
 import json
 import os
@@ -41,7 +42,7 @@ _T = TypeVar("_T")
 
 class CollectionQueryableContext(Generic[T], AbstractAsyncQueryable[T]):
     def __init__(
-        self, collection: "Collection[T]", file_path: Path, mode: Any = "r"
+        self, collection: "AbstractCollection[T]", file_path: Path, mode: Any = "r"
     ) -> None:
         super().__init__()
         self._collection = collection
@@ -87,35 +88,20 @@ class CollectionQueryableContext(Generic[T], AbstractAsyncQueryable[T]):
         os.remove(self._file_path)
 
 
-class Collection(Generic[T]):
+class AbstractCollection(Generic[T]):
     """A collection of an specified entity type. Acts like a table."""
 
-    def __init__(
-        self, engine: "Engine", entity_type: type[T], name: Optional[str] = None, /
-    ) -> None:
+    def __init__(self, engine: "Engine", /) -> None:
         """Create a new collection.
 
         Args:
             engine (`Engine`): The engine to use.
-            entity_type (`type`): The type of the entity.
-            name (`str`, optional): The name of the collection. Defaults to name of entity_type.
         """
 
         # if engine is None or not isinstance(engine, Engine):  # type: ignore
         #     raise ValueError("engine must be an instance of Engine")
         self._engine = engine
 
-        if entity_type is None or not isinstance(entity_type, type):  # type: ignore
-            raise ValueError("entity_type must be a type")
-
-        self._name = name or entity_type.__name__
-
-        if not issubclass(entity_type, TEntity):  # type: ignore
-            raise TypeError(
-                f"The entity_type must be a subclass of {TEntity.__name__}."
-            )
-
-        self._entity_type: type[T] = entity_type  # type: ignore
         self._main_file_lock = asyncio.Lock()
         self._main_iter_ctx: Optional[CollectionQueryableContext[T]] = None
 
@@ -134,17 +120,17 @@ class Collection(Generic[T]):
             async for data in tmp_file:
                 yield data
 
-    @final
     @property
+    @abstractmethod
     def name(self) -> str:
         """Get the name of the collection."""
-        return self._name
+        ...
 
-    @final
     @property
+    @abstractmethod
     def entity_type(self) -> type[T]:
         """Get the type of the entity."""
-        return self._entity_type
+        ...
 
     def get_queryable(self) -> CollectionQueryableContext[T]:
         """Get an queryable context for this collection."""
@@ -159,11 +145,11 @@ class Collection(Generic[T]):
 
     @final
     def _collection_path_builder(self):
-        return self._engine.get_base_path(self) / self._name
+        return self._engine.get_base_path(self) / self.name
 
     @final
     def _collection_tmp_path_builder(self, __id: Optional[str] = None):
-        return self._engine.get_base_path(self) / f"__{self._name}_{__id}__"
+        return self._engine.get_base_path(self) / f"__{self.name}_{__id}__"
 
     @final
     def _collection_exists(self) -> bool:
@@ -223,8 +209,8 @@ class Collection(Generic[T]):
     @final
     async def _add_to_file_async(self, entity: T) -> None:
 
-        if not isinstance(entity, self._entity_type):
-            raise TypeError(f"The entity must be of type {self._entity_type.__name__}.")
+        if not isinstance(entity, self.entity_type):
+            raise TypeError(f"The entity must be of type {self.entity_type.__name__}.")
 
         if isinstance(entity, TEntity):
             # Check for reference properties
@@ -241,9 +227,9 @@ class Collection(Generic[T]):
     async def _add_many_to_file_async(self, *entities: T) -> None:
 
         for e in entities:
-            if not isinstance(e, self._entity_type):
+            if not isinstance(e, self.entity_type):
                 raise TypeError(
-                    f"All entities must be of type {self._entity_type.__name__}."
+                    f"All entities must be of type {self.entity_type.__name__}."
                 )
 
             if isinstance(e, TEntity):
@@ -283,7 +269,7 @@ class Collection(Generic[T]):
                             await tmp_f.write(line)
                             continue
 
-                        current_data = deserialize(self._entity_type, json.loads(line))
+                        current_data = deserialize(self.entity_type, json.loads(line))
                         if current_data is not None and query(current_data):  # type: ignore
                             if update is not None:
                                 update(current_data)
@@ -304,8 +290,8 @@ class Collection(Generic[T]):
     @final
     async def _update_entity_async(self, entity: T, delete: bool = False) -> None:
 
-        if not isinstance(entity, self._entity_type):
-            raise TypeError(f"The entity must be of type {self._entity_type.__name__}.")
+        if not isinstance(entity, self.entity_type):
+            raise TypeError(f"The entity must be of type {self.entity_type.__name__}.")
 
         async with self._main_file_lock:
             file_path = self._collection_path_builder()
@@ -344,8 +330,8 @@ class Collection(Generic[T]):
 
         async with self.get_queryable() as tmp_file:
             async for line in tmp_file.iter_lines():
-                if Collection._check_by_id(line, __id):
-                    data = deserialize(self._entity_type, json.loads(line))
+                if AbstractCollection._check_by_id(line, __id):
+                    data = deserialize(self.entity_type, json.loads(line))
                     return data
         return None
 
@@ -384,7 +370,7 @@ class Collection(Generic[T]):
         """
 
         if callable(selector):
-            prop = selector(self._entity_type)
+            prop = selector(self.entity_type)
             if isinstance(prop, TProperty):
                 selector = prop.json_property_name or prop.actual_name
 
@@ -392,7 +378,7 @@ class Collection(Generic[T]):
             async for line in tmp_file.iter_lines():
                 for item in ijson.items(line, selector):
                     if item == __value:
-                        data = deserialize(self._entity_type, json.loads(line))
+                        data = deserialize(self.entity_type, json.loads(line))
                         if data is not None:
                             yield data
                         break
@@ -555,7 +541,7 @@ class Collection(Generic[T]):
         """
 
         if isinstance(entity, TEntity):
-            prop = selector(self._entity_type)
+            prop = selector(self.entity_type)
             if isinstance(prop, (VirtualComplexProperty, VirtualListProperty)):
                 # get a collection for reference type
                 col = self._engine.get_collection(prop.type_of_entity)
@@ -581,3 +567,44 @@ class Collection(Generic[T]):
             async for _ in iter_ctx.iter_lines():
                 count += 1
             return count
+
+
+class Collection(Generic[T], AbstractCollection[T]):
+    """A collection of an specified entity type. Acts like a table."""
+
+    def __init__(
+        self, engine: "Engine", entity_type: type[T], name: Optional[str] = None, /
+    ) -> None:
+        """Create a new collection.
+
+        Args:
+            engine (`Engine`): The engine to use.
+            entity_type (`type`): The type of the entity.
+            name (`str`, optional): The name of the collection. Defaults to name of entity_type.
+        """
+
+        super().__init__(engine)
+
+        if entity_type is None or not isinstance(entity_type, type):  # type: ignore
+            raise ValueError("entity_type must be a type")
+
+        self._name = name or entity_type.__name__
+
+        if not issubclass(entity_type, TEntity):  # type: ignore
+            raise TypeError(
+                f"The entity_type must be a subclass of {TEntity.__name__}."
+            )
+
+        self._entity_type: type[T] = entity_type  # type: ignore
+
+    @final
+    @property
+    def name(self) -> str:
+        """Get the name of the collection."""
+        return self._name
+
+    @final
+    @property
+    def entity_type(self) -> type[T]:
+        """Get the type of the entity."""
+        return self._entity_type
