@@ -14,6 +14,8 @@ The package is available at [PYPI](https://pypi.org/project/json-entity).
 
 Let's see how you can get started with the package.
 
+See also our [Wiki](https://github.com/immmdreza/simple-json-db/wiki).
+
 ### Create Model
 
 Step #1 is to create a model that represents something like a row in a table.
