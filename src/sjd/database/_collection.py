@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 _T = TypeVar("_T")
 
 
-class CollectionIterContext(Generic[T], AbstractAsyncQueryable[T]):
+class CollectionQueryableContext(Generic[T], AbstractAsyncQueryable[T]):
     def __init__(
         self, collection: "Collection[T]", file_path: Path, mode: Any = "r"
     ) -> None:
@@ -117,10 +117,10 @@ class Collection(Generic[T]):
 
         self._entity_type: type[T] = entity_type  # type: ignore
         self._main_file_lock = asyncio.Lock()
-        self._main_iter_ctx: Optional[CollectionIterContext[T]] = None
+        self._main_iter_ctx: Optional[CollectionQueryableContext[T]] = None
 
     async def __aenter__(self):
-        self._main_iter_ctx = self.iterate()
+        self._main_iter_ctx = self.get_queryable()
         return self._main_iter_ctx
 
     async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any):
@@ -130,7 +130,7 @@ class Collection(Generic[T]):
             self._main_iter_ctx = None
 
     async def __aiter__(self):
-        async with self.iterate() as tmp_file:
+        async with self.get_queryable() as tmp_file:
             async for data in tmp_file:
                 yield data
 
@@ -145,6 +145,13 @@ class Collection(Generic[T]):
     def entity_type(self) -> type[T]:
         """Get the type of the entity."""
         return self._entity_type
+
+    def get_queryable(self) -> CollectionQueryableContext[T]:
+        """Get an queryable context for this collection."""
+        __id = str(uuid4())
+        return CollectionQueryableContext[T](
+            self, self._collection_tmp_path_builder(__id), "rb"
+        )
 
     @staticmethod
     def _check_by_id(line_of: str, __id: str) -> bool:
@@ -328,17 +335,6 @@ class Collection(Generic[T]):
             else:
                 os.remove(tmp_path.absolute())
 
-    def iterate(self) -> CollectionIterContext[T]:
-        """Get an iterable context for this collection.
-
-        Args:
-            mode (`Any`): The mode to open the file with.
-        """
-        __id = str(uuid4())
-        return CollectionIterContext[T](
-            self, self._collection_tmp_path_builder(__id), "rb"
-        )
-
     async def get(self, __id: str):
         """Get an entity by its id.
 
@@ -346,7 +342,7 @@ class Collection(Generic[T]):
             __id (`str`): The id of the entity.
         """
 
-        async with self.iterate() as tmp_file:
+        async with self.get_queryable() as tmp_file:
             async for line in tmp_file.iter_lines():
                 if Collection._check_by_id(line, __id):
                     data = deserialize(self._entity_type, json.loads(line))
@@ -354,9 +350,7 @@ class Collection(Generic[T]):
         return None
 
     @overload
-    def iter_by_prop_value(
-        self, selector: str, __value: Any, /
-    ) -> AsyncGenerator[T, None]:
+    def iterate_by(self, selector: str, __value: Any, /) -> AsyncGenerator[T, None]:
         """Iterate over all entities that have a certain property value.
 
         Args:
@@ -367,7 +361,7 @@ class Collection(Generic[T]):
         ...
 
     @overload
-    def iter_by_prop_value(
+    def iterate_by(
         self, selector: Callable[[type[T]], _T], __value: _T, /
     ) -> AsyncGenerator[T, None]:
         """Iterate over all entities that have a certain property value.
@@ -378,7 +372,7 @@ class Collection(Generic[T]):
         """
         ...
 
-    async def iter_by_prop_value(
+    async def iterate_by(
         self, selector: str | Callable[[type[T]], _T], __value: _T, /
     ) -> AsyncGenerator[T, None]:
         """Iterate over all entities that have a certain property value.
@@ -394,7 +388,7 @@ class Collection(Generic[T]):
             if isinstance(prop, TProperty):
                 selector = prop.json_property_name or prop.actual_name
 
-        async with self.iterate() as tmp_file:
+        async with self.get_queryable() as tmp_file:
             async for line in tmp_file.iter_lines():
                 for item in ijson.items(line, selector):
                     if item == __value:
@@ -422,7 +416,7 @@ class Collection(Generic[T]):
     ) -> Optional[T]:
         """Get the first entity that has a certain property value."""
 
-        async for item in self.iter_by_prop_value(selector, __value):
+        async for item in self.iterate_by(selector, __value):
             return item
         return None
 
@@ -538,7 +532,7 @@ class Collection(Generic[T]):
 
                     # TODO: Is this performance wise ?
                     results: list[Any] = []
-                    async for item in col.iter_by_prop_value(prop.refers_to, entity.id):
+                    async for item in col.iterate_by(prop.refers_to, entity.id):
                         if except_one:
                             setattr(entity, prop.actual_name, item)
                             return
@@ -569,7 +563,7 @@ class Collection(Generic[T]):
                     raise ValueError(
                         f"No collection for referenced type {prop.type_of_entity} found"
                     )
-                async for item in col.iter_by_prop_value(prop.refers_to, entity.id):
+                async for item in col.iterate_by(prop.refers_to, entity.id):
                     yield item  # type: ignore
         else:
             raise TypeError("Entity should be an instance of TEntity.")

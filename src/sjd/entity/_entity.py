@@ -1,5 +1,5 @@
 from abc import ABC
-from typing import Any, ClassVar, Optional
+from typing import Any, ClassVar, Optional, final
 import uuid
 
 from ._property import TProperty
@@ -23,10 +23,12 @@ class TEntity(Serializable, ABC):
         obj.__id = str(uuid.uuid4())
         return obj
 
+    @final
     @property
     def id(self):
         return self.__id
 
+    @final
     @classmethod
     def get_properties(cls):
         """

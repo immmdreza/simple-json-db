@@ -139,7 +139,7 @@ async for student in collection:
 Get data with some filters.
 
 ```py
-async for student in engine.students.iter_by_prop_value(
+async for student in engine.students.iterate_by(
     lambda s: s.last_name, "Doe"
 ):
     print(student.first_name)
@@ -153,7 +153,7 @@ async for student in engine.students.iter_by_prop_value(
 Ops they were all "Doe".
 
 ```py
-async for student in engine.students.iter_by_prop_value(
+async for student in engine.students.iterate_by(
     lambda s: s.first_name, "John"
 ):
     print(student.first_name)
@@ -338,7 +338,7 @@ There are two methods that are probably faster than `as_queryable` way.
 
     Get an entity by it's id, Which is (`entity.id`). We use this for `update` and `delete` method.
 
-2. `iter_by_prop_value(__prop: str, __value: Any)`
+2. `iterate_by(__prop: str, __value: Any)`
 
     Use this to do an `async iterate` over all entities with `entity[__prop] == __value`.
     We use this to work with virtual objects.
@@ -348,7 +348,7 @@ There are two methods that are probably faster than `as_queryable` way.
     Just like 2, but returns the first.
 
 ```py
-async for student in engine.students.iter_by_prop_value("first_name", "Jill"):
+async for student in engine.students.iterate_by("first_name", "Jill"):
     print(student.last_name)
 ```
 
