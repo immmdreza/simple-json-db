@@ -8,7 +8,7 @@ _This package is for tiny and simple projects. with a low amount of data._
 
 ## Installation
 
-The package is available at [PYPI](https://pypi.org/project/json-entity).
+The package is available at [PYPI](https://pypi.org/project/json-entity) as json-entity.
 
 ## Intro
 
@@ -108,6 +108,26 @@ class Student(TEntity):
 ```
 
 1. For models with `__init__` that accepts some parameters, you **SHOULD** include `__json_init__ = True` or it will fail while deserializing the data.
+
+<details>
+    <summary>Even Quicker</summary>
+
+    Package provides a way to resolve model's properties from `__init__` function, without specifing them directly.
+    
+    This can be used for simple models only.
+    
+    ```py
+    from src.sjd import TEntity, properties as props
+
+    @props.collect_props_from_init
+    class Student(TEntity):
+        def __init__(self, student_id: int, first_name: str, last_name: str):
+            self.student_id = student_id
+            self.first_name = first_name
+            self.last_name = last_name
+
+    ```
+</details>
 
 ### Add more data
 
