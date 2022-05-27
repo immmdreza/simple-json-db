@@ -321,9 +321,9 @@ if jill.grades:
 Oh who's score was 50 ??!
 
 ```py
-async with collection as iter_ctx:
+async with collection.iterate() as students:
 
-    with_50_score = await iter_ctx.as_queryable.where(
+    with_50_score = await students.where(
         lambda s: any(x.score == 50 for x in s.grades)).single()
     print(with_50_score.first_name)
 ```

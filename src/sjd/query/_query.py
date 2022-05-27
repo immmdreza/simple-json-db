@@ -3,7 +3,7 @@ from ..serialization._shared import T
 
 
 class Query(Generic[T]):
-    def __init__(self, query: Callable[[type[T]], bool]) -> None:
+    def __init__(self, query: Callable[[T], bool]) -> None:
         self._query = query
 
     def check(self, against: T):

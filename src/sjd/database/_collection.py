@@ -13,6 +13,7 @@ from typing import (
     Optional,
     TYPE_CHECKING,
     TypeVar,
+    cast,
     final,
     overload,
 )
@@ -22,7 +23,7 @@ import ijson  # type: ignore
 import aiofiles
 
 from ..entity import TEntity, TProperty
-from ..query import AsyncQueryable
+from ..query._queryable import AbstractAsyncQueryable
 from ..serialization import deserialize, serialize
 from ..serialization._shared import T
 from ..entity.properties import (
@@ -38,10 +39,11 @@ if TYPE_CHECKING:
 _T = TypeVar("_T")
 
 
-class CollectionIterContext(Generic[T], AsyncIterable[T]):
+class CollectionIterContext(Generic[T], AbstractAsyncQueryable[T]):
     def __init__(
         self, collection: "Collection[T]", file_path: Path, mode: Any = "r"
     ) -> None:
+        super().__init__()
         self._collection = collection
         self._file_path = file_path
         self._mode = mode
@@ -53,11 +55,11 @@ class CollectionIterContext(Generic[T], AsyncIterable[T]):
     def closed(self):
         return self._closed
 
-    async def __aiter__(self):
+    async def __aiter__(self) -> AsyncGenerator[T, None]:
         async for line in self.iter_lines():
             obj = deserialize(self._collection.entity_type, json.loads(line))
-            if obj is not None:
-                yield obj
+            if self._check(obj):
+                yield cast(T, obj)
 
     async def __aenter__(self):
         if not self._initialized:
@@ -83,12 +85,6 @@ class CollectionIterContext(Generic[T], AsyncIterable[T]):
                 await self._file.close()
                 self._closed = True
         os.remove(self._file_path)
-
-    @final
-    @property
-    def as_queryable(self) -> AsyncQueryable[T]:
-        """Get a queryable object for this collection."""
-        return AsyncQueryable(self)
 
 
 class Collection(Generic[T]):

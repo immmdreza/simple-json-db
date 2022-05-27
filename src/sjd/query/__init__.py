@@ -1,5 +1,5 @@
 from ._query import Query
-from ._queryable import Queryable, AsyncQueryable
+from ._queryable import Queryable, AbstractAsyncQueryable
 
 
-__all__ = ["Query", "Queryable", "AsyncQueryable"]
+__all__ = ["Query", "Queryable", "AbstractAsyncQueryable"]
