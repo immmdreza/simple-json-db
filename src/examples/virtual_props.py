@@ -6,11 +6,11 @@ from sjd import TEntity, Engine, properties as props
 class Grade(TEntity):
     __json_init__ = True
 
-    course_id = props.IntProperty(required=True)
-    course_name = props.StrProperty(required=True)
-    score = props.IntProperty(required=True)
+    course_id = props.integer(required=True)
+    course_name = props.string(required=True)
+    score = props.integer(required=True)
 
-    student_id = props.ReferenceProperty()
+    student_id = props.reference()
 
     def __init__(self, course_id: int, course_name: str, score: int):
         self.course_id = course_id
@@ -21,11 +21,11 @@ class Grade(TEntity):
 class Student(TEntity):
     __json_init__ = True
 
-    student_id = props.IntProperty(required=True)
-    first_name = props.StrProperty(required=True)
-    last_name = props.StrProperty()
+    student_id = props.integer(required=True)
+    first_name = props.string(required=True)
+    last_name = props.string()
 
-    grades = props.VirtualListProperty(Grade, "student_id")
+    grades = props.from_entities(Grade, "student_id")
 
     def __init__(
         self,

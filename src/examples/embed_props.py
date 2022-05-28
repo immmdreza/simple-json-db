@@ -22,14 +22,14 @@ class Student(TEntity):
 
     student_id = props.string(required=True)
     first_name = props.string(required=True)
-    last_name = props.string()
+    last_name = props.optional(props.string())
     grades = props.array(Grade)
 
     def __init__(
         self,
         student_id: int,
         first_name: str,
-        last_name: str,
+        last_name: str | None = None,
         grades: list[Grade] = [],
     ):
         self.student_id = student_id

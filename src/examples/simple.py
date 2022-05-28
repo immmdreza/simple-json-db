@@ -9,8 +9,8 @@ class Student(TEntity):
     __json_init__ = True  # This is required if you wanna use __init__.
 
     # Here are some properties to store.
-    first_name = props.StrProperty(required=True)
-    last_name = props.OptionalProperty(str)
+    first_name = props.string(required=True)
+    last_name = props.optional(props.string())
 
     def __init__(self, first_name: str, last_name: Optional[str]):
         self.first_name = first_name
