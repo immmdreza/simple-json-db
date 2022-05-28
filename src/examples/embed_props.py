@@ -7,9 +7,9 @@ from sjd import TEntity, EmbedEntity, Engine, properties as props
 class Grade(EmbedEntity):
     __json_init__ = True
 
-    course_id = props.IntProperty(required=True)
-    course_name = props.StrProperty(required=True)
-    score = props.IntProperty(required=True)
+    course_id = props.integer(required=True)
+    course_name = props.string(required=True)
+    score = props.integer(required=True)
 
     def __init__(self, course_id: int, course_name: str, score: int):
         self.course_id = course_id
@@ -20,10 +20,10 @@ class Grade(EmbedEntity):
 class Student(TEntity):
     __json_init__ = True
 
-    student_id = props.IntProperty(required=True)
-    first_name = props.StrProperty(required=True)
-    last_name = props.StrProperty()
-    grades = props.ListProperty(Grade, default_factory=list)
+    student_id = props.string(required=True)
+    first_name = props.string(required=True)
+    last_name = props.string()
+    grades = props.array(Grade)
 
     def __init__(
         self,
