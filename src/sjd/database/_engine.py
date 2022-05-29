@@ -1,102 +1,13 @@
 import inspect
 
 from pathlib import Path
-from typing import Any, Generic, Optional, TypeVar, cast, final, overload
+from typing import Any, Optional, TypeVar, final
 
 from ..entity import TEntity
 from ..serialization._shared import T
 from ._collection import AbstractCollection, Collection
-
-
-class __Collection__(Generic[T]):
-    """This is a descriptor of Collection. Can only be used in an engine class as `ClassVar`."""
-
-    def __init__(self, entity_type: type[T]) -> None:
-        """This is a descriptor of Collection."""
-        super().__init__()
-        self._entity_type = entity_type
-
-    def __set_name__(self, owner: type[object], name: str) -> None:
-        self._collection_name = name
-
-    @final
-    @property
-    def collection_name(self) -> str:
-        return self._collection_name
-
-    @final
-    @property
-    def entity_type(self) -> type[T]:
-        return self._entity_type
-
-    @overload
-    def __get__(self, obj: None, objtype: None) -> "__Collection__[T]":
-        ...
-
-    @overload
-    def __get__(self, obj: object, objtype: type[object]) -> AbstractCollection[T]:
-        ...
-
-    def __get__(
-        self, obj: object | None, objtype: type[object] | None = None
-    ) -> "__Collection__[T]" | AbstractCollection[T]:
-        if obj is None:
-            return self
-        col = cast("Engine", obj).get_collection(self._entity_type)
-        if col is None:
-            raise AttributeError(f"Can't get such collection {self._entity_type}")
-        return col
-
-    def __set__(self, obj: object, value: T) -> None:
-        raise AttributeError("Engine collections are read-only.")
-
-
-_TCol = TypeVar("_TCol", bound=AbstractCollection[Any])
-
-
-class __Typed_Collection__(Generic[T, _TCol]):
-    """This is a descriptor of Typed Collection. Can only be used in an engine class as `ClassVar`."""
-
-    def __init__(
-        self, entity_type: type[T], collection_type: type[AbstractCollection[T]]
-    ) -> None:
-        """This is a descriptor of Collection."""
-        super().__init__()
-        self._collection_type = collection_type
-        self._entity_type = entity_type
-
-    @final
-    @property
-    def collection_type(self):
-        return self._collection_type
-
-    @final
-    @property
-    def entity_type(self) -> type[T]:
-        return self._entity_type
-
-    @overload
-    def __get__(self, obj: None, objtype: None) -> "__Typed_Collection__[T, _TCol]":
-        ...
-
-    @overload
-    def __get__(self, obj: object, objtype: type[object]) -> _TCol:
-        ...
-
-    def __get__(
-        self, obj: object | None, objtype: type[object] | None = None
-    ) -> "__Typed_Collection__[T, _TCol]" | _TCol:
-        if obj is None:
-            return self
-        t_col = cast("Engine", obj).get_collection(self._entity_type)
-        if t_col is None:
-            raise AttributeError(
-                f"Can't get such typed collection {self._entity_type}, {self._collection_type}"
-            )
-        return cast(_TCol, t_col)
-
-    def __set__(self, obj: object, value: T) -> None:
-        raise AttributeError("can't set attribute")
+from ._descriptors import __Collection__, __Typed_Collection__, _TCol  # type: ignore
+from ._configuration import EngineConfiguration, CollectionConfiguration
 
 
 class EngineNotInitialized(Exception):
@@ -118,6 +29,9 @@ class CollectionNotRegistered(Exception):
         super().__init__(
             f"Collection {collection_name} is not registered. Did you done something wired?"
         )
+
+
+_TEngine = TypeVar("_TEngine", bound="Engine")
 
 
 class Engine:
@@ -144,6 +58,8 @@ class Engine:
         self.__collections: dict[type[Any], AbstractCollection[Any]] = {}
         self.__set_collections()
 
+        self.__configs = EngineConfiguration(type(self))
+
     def __setitem__(self, name: str, entity_type: type[Any]) -> None:
         """Manually registers a collection."""
         self.register_collection(entity_type, name)
@@ -168,6 +84,11 @@ class Engine:
     def __initialize_path(self, path: Path):
         if not path.exists():
             path.mkdir(parents=True)
+
+    @property
+    def _configs(self: _TEngine) -> EngineConfiguration[_TEngine]:
+        """Gets the engine configuration."""
+        return self.__configs  # type: ignore
 
     @final
     def get_base_path(self, collection: AbstractCollection[Any]) -> Path:
@@ -285,3 +206,13 @@ class Engine:
             `__Typed_Collection__[T, _TCol]`: The descriptor of the collection. can only be used as an engine's `ClassVar`.
         """
         return __Typed_Collection__[T, _TCol](entity_type, collection_type)
+
+    def get_collection_config(
+        self, _entity_type: type[_TCol]
+    ) -> Optional[CollectionConfiguration[AbstractCollection[_TCol]]]:
+        """Gets the collection configuration.
+
+        Args:
+            _entity_type (`type[_TCol]`): The entity type of the collection.
+        """
+        return self.__configs.get_collection_config(_entity_type)

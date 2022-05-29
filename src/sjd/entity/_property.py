@@ -134,3 +134,8 @@ class TProperty(Generic[T], ABC):
     def default_factory(self) -> Optional[Callable[[], Optional[T]]]:
         """A function that returns a default value for the property."""
         return self._default_factory
+
+    @property
+    def is_virtual(self) -> bool:
+        """Whether the property is virtual."""
+        return getattr(self, "__virtual__", False)

@@ -35,6 +35,7 @@ from ..entity.properties import (
 
 if TYPE_CHECKING:
     from ._engine import Engine
+    from ._configuration import CollectionConfiguration
 
 
 _T = TypeVar("_T")
@@ -131,6 +132,13 @@ class AbstractCollection(Generic[T]):
     def entity_type(self) -> type[T]:
         """Get the type of the entity."""
         ...
+
+    @property
+    def configuration(
+        self,
+    ) -> Optional["CollectionConfiguration[AbstractCollection[T]]"]:
+        """Get the configuration of the collection."""
+        return self._engine.get_collection_config(self.entity_type)  # type: ignore
 
     def get_queryable(self) -> CollectionQueryableContext[T]:
         """Get an queryable context for this collection."""
