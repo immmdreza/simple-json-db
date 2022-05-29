@@ -170,13 +170,6 @@ class AbstractCollection(Generic[T]):
         async with aiofiles.open(collection_path, "w") as f:
             await f.write("")
 
-    async def copy_main_file(self, dest_path: Path):
-        """Copy the main file to a another file."""
-        main_file = self._collection_path_builder()
-
-        async with self._main_file_lock:
-            shutil.copyfile(main_file.absolute(), dest_path.absolute())
-
     @final
     async def _ensure_collection_exists(self) -> None:
         async with self._main_file_lock:
@@ -342,6 +335,14 @@ class AbstractCollection(Generic[T]):
                     data = deserialize(self.entity_type, json.loads(line))
                     return data
         return None
+
+    async def copy_main_file(self, dest_path: Path):
+        """Copy the main file to a another file."""
+        await self._ensure_collection_exists()
+        main_file = self._collection_path_builder()
+
+        async with self._main_file_lock:
+            shutil.copyfile(main_file.absolute(), dest_path.absolute())
 
     @overload
     def iterate_by(self, selector: str, __value: Any, /) -> AsyncGenerator[T, None]:

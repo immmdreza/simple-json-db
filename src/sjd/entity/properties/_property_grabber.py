@@ -1,6 +1,6 @@
 import inspect
 from types import NoneType
-from typing import Any, Callable, NoReturn
+from typing import Any, Callable, NoReturn, Optional
 
 from .._entity import TEntity, EmbedEntity, TProperty
 from ...serialization._shared import T
@@ -65,7 +65,9 @@ def __grab_props(__init__: Callable[..., Any]):
         yield k, *__resolve_type(k, annotation)
 
 
-def collect_props_from_init(Cls: type[T], /) -> type[T]:
+def auto_collect(
+    *, method_name: str = "__init__", ignore_params: Optional[list[str]] = None
+) -> Callable[..., Any]:
     """Automatically collect properties from `__init__` method.
 
     Note that only valid types are allowed.
@@ -77,30 +79,46 @@ def collect_props_from_init(Cls: type[T], /) -> type[T]:
 
     Args:
         Cls (`type[Any]`): Type to collect properties from.
+        method_name (`str`): Name of the method to collect properties from.
+        ignore_params (`list[str]`): List of parameters to ignore.
 
     Returns:
         type[`Any`]: Type with properties collected.
     """
 
-    for member in inspect.getmembers(Cls, inspect.isfunction):
-        if member[0] == "__init__":
-            found_any = False
-            for info in __grab_props(member[1]):
-                setattr(
-                    Cls,
-                    info[0],
-                    TProperty(
-                        info[1],
-                        init=True,
-                        required=not info[2],
-                        json_property_name=info[0],
-                        is_list=info[3],
-                        is_complex=info[4],
-                        default_factory=info[0],  # type: ignore
-                        actual_name=info[0],
-                    ),
-                )
-                found_any = True
-            if found_any:
-                setattr(Cls, "__json_init__", True)
-    return Cls
+    def __collect_them(Cls: type[T], /) -> type[T]:
+        if ignore_params is None:
+            to_ignore = []
+        else:
+            to_ignore = ignore_params
+
+        for member in inspect.getmembers(Cls, inspect.isfunction):
+            if member[0] == method_name:
+                found_any = False
+                for info in __grab_props(member[1]):
+                    if info[0] in to_ignore:
+                        continue
+
+                    if hasattr(Cls, info[0]):
+                        continue
+
+                    setattr(
+                        Cls,
+                        info[0],
+                        TProperty(
+                            info[1],
+                            init=True,
+                            required=not info[2],
+                            json_property_name=info[0],
+                            is_list=info[3],
+                            is_complex=info[4],
+                            default_factory=info[0],  # type: ignore
+                            actual_name=info[0],
+                        ),
+                    )
+                    found_any = True
+                if found_any:
+                    setattr(Cls, "__json_init__", True)
+        return Cls
+
+    return __collect_them

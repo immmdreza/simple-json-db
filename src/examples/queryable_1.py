@@ -3,7 +3,7 @@ import asyncio
 from sjd import Engine, Collection, TEntity, properties
 
 
-@properties.collect_props_from_init
+@properties.auto_collect()
 class Student(TEntity):
     def __init__(self, first_name: str) -> None:
         self.first_name = first_name

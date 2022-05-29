@@ -2,7 +2,7 @@ import asyncio
 from sjd import Engine, Collection, TEntity, properties as props
 
 
-@props.collect_props_from_init
+@props.auto_collect()
 class Employee(TEntity):
     def __init__(self, employee_id: int, first_name: str, last_name: str):
         self.employee_id = employee_id

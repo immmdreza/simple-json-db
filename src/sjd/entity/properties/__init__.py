@@ -7,7 +7,7 @@ from ._int_property import IntProperty
 from ._str_property import StrProperty, ReferenceProperty
 from ._float_property import FloatProperty
 from ._bool_property import BoolProperty
-from ._property_grabber import collect_props_from_init
+from ._property_grabber import auto_collect
 from .._property import TProperty
 from ...serialization._shared import T
 
