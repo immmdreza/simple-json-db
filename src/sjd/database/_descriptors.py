@@ -41,10 +41,7 @@ class __Collection__(Generic[T]):
     ) -> "__Collection__[T]" | AbstractCollection[T]:
         if obj is None:
             return self
-        col = cast("Engine", obj).get_collection(self._entity_type)
-        if col is None:
-            raise AttributeError(f"Can't get such collection {self._entity_type}")
-        return col
+        return cast("Engine", obj).get_collection(self._entity_type)
 
     def __set__(self, obj: object, value: T) -> None:
         raise AttributeError("Engine collections are read-only.")
@@ -82,10 +79,6 @@ class __Typed_Collection__(Generic[T, _TCol], __Collection__[T]):
         if obj is None:
             return self
         t_col = cast("Engine", obj).get_collection(self._entity_type)
-        if t_col is None:
-            raise AttributeError(
-                f"Can't get such typed collection {self._entity_type}, {self._collection_type}"
-            )
         return cast(_TCol, t_col)
 
     def __set__(self, obj: object, value: T) -> None:

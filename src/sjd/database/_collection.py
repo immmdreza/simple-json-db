@@ -195,10 +195,6 @@ class AbstractCollection(Generic[T]):
 
                                 # get a collection for reference type
                                 col = self._engine.get_collection(prop.type_of_entity)  # type: ignore
-                                if col is None:
-                                    raise ValueError(
-                                        f"No collection for referenced type {prop.type_of_entity} found"  # type: ignore
-                                    )
 
                                 await col.add(value)  # type: ignore
                                 delattr(entity, prop.actual_name)
@@ -288,6 +284,34 @@ class AbstractCollection(Generic[T]):
             else:
                 os.remove(tmp_path.absolute())
 
+    async def _care_about_virtual_props(self, entity: TEntity):
+        col_config = self.configuration
+        if col_config is None:
+            return
+
+        for prop in entity.get_properties():
+            if isinstance(prop, (VirtualComplexProperty, VirtualListProperty)):
+                prop_config = col_config.get_property_config(prop.actual_name)
+                if prop_config is None:
+                    continue
+
+                match prop_config.delete_action.value:
+                    case "delete_entity":
+                        entity_col = self._engine.get_collection(prop.type_of_entity)
+
+                        async for item in self.iter_referenced_by(entity, lambda _: prop):  # type: ignore
+                            await entity_col.delete(item)
+
+                    case "delete_reference":
+                        entity_col = self._engine.get_collection(prop.type_of_entity)
+
+                        async for item in self.iter_referenced_by(entity, lambda _: prop):  # type: ignore
+                            setattr(item, prop.refers_to, None)
+                            await entity_col.update(item)
+
+                    case "ignore":
+                        continue
+
     @final
     async def _update_entity_async(self, entity: T, delete: bool = False) -> None:
 
@@ -319,6 +343,9 @@ class AbstractCollection(Generic[T]):
             if modified:
                 os.remove(file_path.absolute())
                 os.rename(tmp_path.absolute(), file_path.absolute())
+
+                if delete:
+                    await self._care_about_virtual_props(entity)  # type: ignore
             else:
                 os.remove(tmp_path.absolute())
 
@@ -520,10 +547,6 @@ class AbstractCollection(Generic[T]):
                     except_one = isinstance(prop, VirtualComplexProperty)
                     # get a collection for reference type
                     col = self._engine.get_collection(prop.type_of_entity)  # type: ignore
-                    if col is None:
-                        raise ValueError(
-                            f"No collection for referenced type {prop.type_of_entity} found"  # type: ignore
-                        )
 
                     # TODO: Is this performance wise ?
                     results: list[Any] = []
@@ -554,10 +577,7 @@ class AbstractCollection(Generic[T]):
             if isinstance(prop, (VirtualComplexProperty, VirtualListProperty)):
                 # get a collection for reference type
                 col = self._engine.get_collection(prop.type_of_entity)
-                if col is None:
-                    raise ValueError(
-                        f"No collection for referenced type {prop.type_of_entity} found"
-                    )
+
                 async for item in col.iterate_by(prop.refers_to, entity.id):
                     yield item  # type: ignore
         else:

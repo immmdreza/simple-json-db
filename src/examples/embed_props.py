@@ -22,7 +22,7 @@ class Student(TEntity):
 
     student_id = props.string(required=True)
     first_name = props.string(required=True)
-    last_name = props.optional(props.string())
+    last_name = props.string().optional()
     grades = props.array(Grade)
 
     def __init__(

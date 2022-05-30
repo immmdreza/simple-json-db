@@ -67,7 +67,7 @@ def __grab_props(__init__: Callable[..., Any]):
 
 def auto_collect(
     *, method_name: str = "__init__", ignore_params: Optional[list[str]] = None
-) -> Callable[..., Any]:
+) -> Callable[[type[T]], type[T]]:
     """Automatically collect properties from `__init__` method.
 
     Note that only valid types are allowed.

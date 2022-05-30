@@ -98,21 +98,10 @@ def entity(
     )
 
 
-def optional(property: TProperty[T]) -> OptionalProperty[T]:
+def optional(property: TProperty[T]) -> TProperty[Optional[T]]:
     if isinstance(property, OptionalProperty):
         return property  # type: ignore
-
-    if property.required:
-        raise ValueError("Cannot create an optional property from a required property.")
-
-    return OptionalProperty(
-        property.type_of_entity,
-        init=property.init,
-        default_factory=lambda: None,
-        is_list=property.is_list,
-        json_property_name=property.json_property_name,
-        is_complex=property.is_complex,
-    )
+    return property.optional()
 
 
 def from_entity(
@@ -146,7 +135,7 @@ def reference():
 
 
 __all__ = [
-    "collect_props_from_init",
+    "auto_collect",
     "integer",
     "string",
     "double",

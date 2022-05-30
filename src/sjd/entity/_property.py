@@ -139,3 +139,21 @@ class TProperty(Generic[T], ABC):
     def is_virtual(self) -> bool:
         """Whether the property is virtual."""
         return getattr(self, "__virtual__", False)
+
+    def optional(self):
+        """Returns a clone of the property with the required flag set to False and hints as optional."""
+
+        if self.required:
+            raise ValueError(
+                "Cannot create an optional property from a required property."
+            )
+
+        return TProperty[Optional[T]](
+            self.type_of_entity,
+            init=self.init,
+            required=False,
+            default_factory=lambda: None,
+            is_list=self.is_list,
+            json_property_name=self.json_property_name,
+            is_complex=self.is_complex,
+        )

@@ -70,9 +70,7 @@ class Engine:
         Args:
             entity_type (`type[T]`): The entity type of the collection.
         """
-        if (col := self.get_collection(entity_type)) is not None:
-            return col
-        raise KeyError(f"Collection of type {entity_type} is not registered")
+        return self.get_collection(entity_type)
 
     def __set_collections(self):
         for _, col in inspect.getmembers(type(self)):
@@ -111,7 +109,7 @@ class Engine:
         return self._base_path
 
     @final
-    def get_collection(self, entity_type: type[T]) -> Optional[AbstractCollection[T]]:
+    def get_collection(self, entity_type: type[T]) -> AbstractCollection[T]:
         """Returns the collection of the entity type.
 
         Args:
@@ -126,7 +124,7 @@ class Engine:
         if not self.__initialized:
             raise EngineNotInitialized()
         if entity_type not in self.__collections:
-            return None
+            self.register_collection(entity_type)
         return self.__collections[entity_type]
 
     @final
@@ -158,9 +156,13 @@ class Engine:
             raise CollectionEntityTypeDuplicated(
                 name or entity_type.__name__, entity_type
             )
+
+        if entity_type is None or not issubclass(entity_type, TEntity):
+            raise ValueError("entity_type must be a TEntity.")
+
         col = Collection(self, entity_type, name)
         self.__collections[entity_type] = col
-        return col
+        return col  # type: ignore
 
     def register_typed_collection(
         self, collection: type[AbstractCollection[T]]

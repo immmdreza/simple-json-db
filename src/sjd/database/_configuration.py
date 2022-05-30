@@ -14,12 +14,24 @@ _TEngine = TypeVar("_TEngine", bound="Engine")
 
 
 class DeleteAction(Enum):
-    DELETE_VIRTUAL = "delete"
+    DELETE_ENTITY = "delete_entity"
     """ Deletes all virtual entities associated with the entity. """
     DELETE_REFERENCE = "delete_reference"
     """ Removes the reference property from the virtual entities. """
     IGNORE = "ignore"
     """ Ignores the virtual entities. """
+
+    @property
+    def ignore(self) -> bool:
+        return self == DeleteAction.IGNORE
+
+    @property
+    def delete_reference(self) -> bool:
+        return self == DeleteAction.DELETE_REFERENCE
+
+    @property
+    def delete_entity(self) -> bool:
+        return self == DeleteAction.DELETE_ENTITY
 
 
 @dataclasses.dataclass(repr=True)
@@ -38,6 +50,14 @@ class PropertyConfiguration:
             )
         self.delete_action = action
         return self
+
+    def delete_whole_reference(self) -> "PropertyConfiguration":
+        """Indicates if the entity which this property referees to should be deleted when current entity is deleted."""
+        return self.set_delete_action(DeleteAction.DELETE_ENTITY)
+
+    def delete_reference_prop(self) -> "PropertyConfiguration":
+        """Indicates if the reference property should be deleted ( from reference entity ) when current entity is deleted."""
+        return self.set_delete_action(DeleteAction.DELETE_REFERENCE)
 
 
 @dataclasses.dataclass(repr=True)
