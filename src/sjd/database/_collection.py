@@ -66,6 +66,7 @@ class CollectionQueryableContext(
         self._initialized = False
         self._closed = False
         self._file = None
+        self._include_props: list[str] = []
 
     @property
     def closed(self):
@@ -76,7 +77,12 @@ class CollectionQueryableContext(
             obj = self._collection.deserialize(line)
             if obj is not None:
                 if self._check(obj.slave):
-                    yield cast(T, self._collection._get_as_tracked(obj))
+                    tracked = self._collection._get_as_tracked(obj)
+                    if self._include_props:
+                        await self._collection.load_virtual_props_async(
+                            obj.slave, *self._include_props
+                        )
+                    yield cast(T, tracked)
 
     async def __aenter__(self):
         if not self._initialized:
@@ -102,6 +108,15 @@ class CollectionQueryableContext(
                 await self._file.close()
                 self._closed = True
         os.remove(self._file_path)
+
+    def include(self, selector: Callable[[T], Optional[_T] | Optional[list[_T]]]):
+        """Include a virtual property in the query result."""
+        selected = selector(self._collection.entity_type)  # type: ignore
+        if isinstance(selected, TProperty):
+            self._include_props.append(
+                selected.json_property_name or selected.actual_name
+            )
+        return self
 
 
 class AbstractCollection(Generic[_TMasterEntity, _TKey, T], ABC):
@@ -456,7 +471,7 @@ class AbstractCollection(Generic[_TMasterEntity, _TKey, T], ABC):
 
     @overload
     def iterate_by_async(
-        self, selector: Callable[[type[T]], _T], __value: _T, /
+        self, selector: Callable[[T], _T], __value: _T, /
     ) -> AsyncGenerator[T, None]:
         """Iterate over all entities that have a certain property value.
 
@@ -467,7 +482,7 @@ class AbstractCollection(Generic[_TMasterEntity, _TKey, T], ABC):
         ...
 
     async def iterate_by_async(
-        self, selector: str | Callable[[type[T]], _T], __value: _T, /
+        self, selector: str | Callable[[T], _T], __value: _T, /
     ) -> AsyncGenerator[T, None]:
         """Iterate over all entities that have a certain property value.
 
@@ -478,7 +493,7 @@ class AbstractCollection(Generic[_TMasterEntity, _TKey, T], ABC):
         """
 
         if callable(selector):
-            prop = selector(self.entity_type)
+            prop = selector(self.entity_type)  # type: ignore
             if isinstance(prop, TProperty):
                 selector = prop.json_property_name or prop.actual_name
 
@@ -502,13 +517,13 @@ class AbstractCollection(Generic[_TMasterEntity, _TKey, T], ABC):
 
     @overload
     def get_first_async(
-        self, selector: Callable[[type[T]], _T], __value: _T
+        self, selector: Callable[[T], _T], __value: _T
     ) -> Coroutine[Any, Any, Optional[T]]:
         """Get the first entity that has a certain property value."""
         ...
 
     async def get_first_async(
-        self, selector: str | Callable[[type[T]], _T], __value: _T
+        self, selector: str | Callable[[T], _T], __value: _T
     ) -> Optional[T]:
         """Get the first entity that has a certain property value."""
 
@@ -585,7 +600,7 @@ class AbstractCollection(Generic[_TMasterEntity, _TKey, T], ABC):
         tracked.set_tracking_mode_delete()
         return tracked
 
-    def delete_many(self, *entities: T) -> list[EntityTracker[_TKey, T]]:
+    def delete_range(self, *entities: T) -> list[EntityTracker[_TKey, T]]:
         """Delete many entities.
 
         Args:
@@ -698,7 +713,6 @@ class Collection(Generic[T], AbstractCollection[UuidMasterEntity, str, T]):
             name (`str`, optional): The name of the collection. Defaults to name of entity_type.
         """
 
-        super().__init__(engine)
         if entity_type is None or not isinstance(entity_type, type):  # type: ignore
             raise ValueError("entity_type must be a type")
 
@@ -711,6 +725,7 @@ class Collection(Generic[T], AbstractCollection[UuidMasterEntity, str, T]):
 
         self._entity_type: type[T] = entity_type  # type: ignore
         self._master_entity_factory = UuidMasterEntityFactory(self._entity_type)
+        super().__init__(engine)
 
     def _check_by_id(self, line_of: str, __id: str) -> bool:
         return line_of[10:46] == __id
