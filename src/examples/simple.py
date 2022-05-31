@@ -34,11 +34,12 @@ async def main():
 
     students = engine.students
 
-    await students.add(Student("John", "Doe"))
+    students.add(Student("John", "Doe"))
+    await students.save_changes_async()
 
-    john = await students.get_first(lambda s: s.first_name, "John")
+    john = await students.get_first_async(lambda s: s.first_name, "John")
     if john:
-        print(john.id)
+        print(john.first_name)
 
 
 if __name__ == "__main__":

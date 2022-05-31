@@ -53,14 +53,15 @@ async def main():
 
     engine = AppEngine()
 
-    await engine.students.add(
+    engine.students.add(
         Student(1, "Arash", "Eshi", [Grade(1, "Physics", 20)]),
     )
+    await engine.students.save_changes_async()
 
-    arash = await engine.students.get_first(lambda s: s.first_name, "Arash")
+    arash = await engine.students.get_first_async(lambda s: s.first_name, "Arash")
 
     if arash:
-        async for grade in engine.students.iter_referenced_by(
+        async for grade in engine.students.iter_referenced_by_async(
             arash, lambda s: s.grades
         ):
             print(grade.course_name)

@@ -14,7 +14,8 @@ class StudentsCollection(Collection[Student]):
         super().__init__(engine, Student, "studentsCollection")
 
     async def add_student(self, first_name: str):
-        return await self.add(Student(first_name))
+        self.add(Student(first_name))
+        await self.save_changes_async()
 
 
 class AppEngine(Engine):
@@ -29,11 +30,11 @@ async def main():
 
     engine = AppEngine()
 
-    await engine.students.add(Student("John"))
-    await engine.students.add(Student("Johnny"))
-    await engine.students.add(Student("Jill"))
-    await engine.students.add(Student("Will"))
-    await engine.students.add(Student("Bill"))
+    await engine.students.add_student("John")
+    await engine.students.add_student("Johnny")
+    await engine.students.add_student("Jill")
+    await engine.students.add_student("Will")
+    await engine.students.add_student("Bill")
 
     async with engine.students.get_queryable() as students:
         async for student in students.where(lambda s: s.first_name.startswith("J")):

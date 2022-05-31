@@ -49,7 +49,7 @@ async def test_update_data(my_engine: TestEngine):
 
         e = await collection.add(SimpleModel(1, "test", True, 1.0))
 
-        added = await collection.get(e.id)
+        added = await collection.get_async(e.id)
 
         assert added
 
@@ -57,7 +57,7 @@ async def test_update_data(my_engine: TestEngine):
 
         await collection.update(added)
 
-        new_added = await collection.get(added.id)
+        new_added = await collection.get_async(added.id)
 
         assert new_added
         assert new_added.boolean_field is False

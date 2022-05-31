@@ -14,6 +14,9 @@ class Serializable(ABC):
         """
         ...
 
+    def serialize(self):
+        return self.__serialize__()
+
     @classmethod
     @abstractmethod
     def __deserialize__(cls, data: Any) -> Any:

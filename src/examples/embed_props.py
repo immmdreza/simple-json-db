@@ -50,10 +50,12 @@ async def main():
 
     engine = AppEngine()
 
-    await engine.students.add_many(
+    engine.students.add_range(
         Student(1, "John", "Doe", [Grade(1, "Math", 90), Grade(2, "English", 80)]),
         Student(2, "Jane", "Doe", [Grade(1, "Math", 90), Grade(2, "English", 80)]),
     )
+
+    await engine.students.save_changes_async()
 
 
 if __name__ == "__main__":

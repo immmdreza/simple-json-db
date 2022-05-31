@@ -55,7 +55,7 @@ class Engine:
 
         self.__initialized = True
         self.__initialize_path(self._base_path)
-        self.__collections: dict[type[Any], AbstractCollection[Any]] = {}
+        self.__collections: dict[type[Any], AbstractCollection[Any, Any, Any]] = {}
         self.__set_collections()
 
         self.__configs = EngineConfiguration(type(self))
@@ -64,7 +64,7 @@ class Engine:
         """Manually registers a collection."""
         self.register_collection(entity_type, name)
 
-    def __getitem__(self, entity_type: type[T]) -> AbstractCollection[T]:
+    def __getitem__(self, entity_type: type[T]) -> AbstractCollection[Any, Any, T]:
         """Gets a collection by entity type.
 
         Args:
@@ -74,10 +74,10 @@ class Engine:
 
     def __set_collections(self):
         for _, col in inspect.getmembers(type(self)):
-            if isinstance(col, __Collection__):
+            if isinstance(col, __Typed_Collection__):
+                self.register_typed_collection(col.collection_type)  # type: ignore
+            elif isinstance(col, __Collection__):
                 self.register_collection(col.entity_type, col.collection_name)  # type: ignore
-            elif isinstance(col, __Typed_Collection__):
-                self.register_typed_collection(col.collection_type)
 
     def __initialize_path(self, path: Path):
         if not path.exists():
@@ -89,7 +89,7 @@ class Engine:
         return self.__configs  # type: ignore
 
     @final
-    def get_base_path(self, collection: AbstractCollection[Any]) -> Path:
+    def get_base_path(self, collection: AbstractCollection[Any, Any, Any]) -> Path:
         """Returns the base path of the engine.
 
         Args:
@@ -109,7 +109,7 @@ class Engine:
         return self._base_path
 
     @final
-    def get_collection(self, entity_type: type[T]) -> AbstractCollection[T]:
+    def get_collection(self, entity_type: type[T]) -> AbstractCollection[Any, Any, T]:
         """Returns the collection of the entity type.
 
         Args:
@@ -128,15 +128,15 @@ class Engine:
         return self.__collections[entity_type]
 
     @final
-    def purge(self) -> None:
+    async def purge(self) -> None:
         """Purges the engine."""
         for collection in self.__collections.values():
-            collection.purge()
+            await collection.purge_async()
         self._base_path.rmdir()
 
     def register_collection(
         self, entity_type: type[T], name: Optional[str] = None, /
-    ) -> AbstractCollection[T]:
+    ) -> AbstractCollection[Any, Any, T]:
         """Manually registers a collection.
 
         Args:
@@ -165,8 +165,8 @@ class Engine:
         return col  # type: ignore
 
     def register_typed_collection(
-        self, collection: type[AbstractCollection[T]]
-    ) -> AbstractCollection[T]:
+        self, collection: type[AbstractCollection[Any, Any, T]]
+    ) -> AbstractCollection[Any, Any, T]:
         if not self.__initialized:
             raise EngineNotInitialized()
 
@@ -211,7 +211,7 @@ class Engine:
 
     def get_collection_config(
         self, _entity_type: type[_TCol]
-    ) -> Optional[CollectionConfiguration[AbstractCollection[_TCol]]]:
+    ) -> Optional[CollectionConfiguration[AbstractCollection[Any, Any, _TCol]]]:
         """Gets the collection configuration.
 
         Args:

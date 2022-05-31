@@ -117,12 +117,12 @@ class EngineConfiguration(Generic[_TEngine]):
         """Initializes the configuration of a collection."""
         self._engine_type = type_of_engine
         self._collection_configs: dict[
-            type[Any], CollectionConfiguration[AbstractCollection[Any]]
+            type[Any], CollectionConfiguration[AbstractCollection[Any, Any, Any]]
         ] = {}
 
     def config_collection(
         self,
-        selector: Callable[[_TEngine], AbstractCollection[T]],
+        selector: Callable[[_TEngine], AbstractCollection[Any, Any, T]],
         configure: Callable[[CollectionConfiguration[T]], Any],
     ) -> "EngineConfiguration[_TEngine]":
         """Configure a collection that is registered with the engine.
@@ -152,7 +152,7 @@ class EngineConfiguration(Generic[_TEngine]):
 
     def get_collection_config(
         self, type_of_entity: type[_TCol]
-    ) -> Optional[CollectionConfiguration[AbstractCollection[_TCol]]]:
+    ) -> Optional[CollectionConfiguration[AbstractCollection[Any, Any, _TCol]]]:
         """Returns the configuration of a collection.
 
         Args:

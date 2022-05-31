@@ -1,4 +1,4 @@
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 import asyncio
 import json
 import os
@@ -23,6 +23,15 @@ from uuid import uuid4
 import ijson  # type: ignore
 import aiofiles
 
+from ._entity_tracker import EntityTracker, TrackingMode
+from ..entity._master_entity import (
+    MasterEntityFactory,
+    UuidMasterEntity,
+    UuidMasterEntityFactory,
+    MasterEntity,
+    _TKey,
+    _TMasterEntity,
+)
 from ..entity import TEntity, TProperty
 from ..query._queryable import AbstractAsyncQueryable
 from ..serialization import deserialize, serialize
@@ -41,12 +50,17 @@ if TYPE_CHECKING:
 _T = TypeVar("_T")
 
 
-class CollectionQueryableContext(Generic[T], AbstractAsyncQueryable[T]):
+class CollectionQueryableContext(
+    Generic[_TMasterEntity, _TKey, T], AbstractAsyncQueryable[T]
+):
     def __init__(
-        self, collection: "AbstractCollection[T]", file_path: Path, mode: Any = "r"
+        self,
+        collection: "AbstractCollection[_TMasterEntity, _TKey, T]",
+        file_path: Path,
+        mode: Any = "r",
     ) -> None:
         super().__init__()
-        self._collection = collection
+        self._collection: "AbstractCollection[_TMasterEntity, _TKey, T]" = collection
         self._file_path = file_path
         self._mode = mode
         self._initialized = False
@@ -59,13 +73,14 @@ class CollectionQueryableContext(Generic[T], AbstractAsyncQueryable[T]):
 
     async def __aiter__(self) -> AsyncGenerator[T, None]:
         async for line in self.iter_lines():
-            obj = deserialize(self._collection.entity_type, json.loads(line))
-            if self._check(obj):
-                yield cast(T, obj)
+            obj = self._collection.deserialize(line)
+            if obj is not None:
+                if self._check(obj.slave):
+                    yield cast(T, self._collection._get_as_tracked(obj))
 
     async def __aenter__(self):
         if not self._initialized:
-            await self._collection.copy_main_file(self._file_path)
+            await self._collection.copy_main_file_async(self._file_path)
             self._initialized = True
         return self
 
@@ -89,7 +104,7 @@ class CollectionQueryableContext(Generic[T], AbstractAsyncQueryable[T]):
         os.remove(self._file_path)
 
 
-class AbstractCollection(Generic[T]):
+class AbstractCollection(Generic[_TMasterEntity, _TKey, T], ABC):
     """A collection of an specified entity type. Acts like a table."""
 
     def __init__(self, engine: "Engine", /) -> None:
@@ -104,7 +119,10 @@ class AbstractCollection(Generic[T]):
         self._engine = engine
 
         self._main_file_lock = asyncio.Lock()
-        self._main_iter_ctx: Optional[CollectionQueryableContext[T]] = None
+        self._main_iter_ctx: Optional[
+            CollectionQueryableContext[_TMasterEntity, _TKey, T]
+        ] = None
+        self._entity_trackers: dict[_TKey, EntityTracker[_TKey, T]] = {}
 
     async def __aenter__(self):
         self._main_iter_ctx = self.get_queryable()
@@ -121,6 +139,14 @@ class AbstractCollection(Generic[T]):
             async for data in tmp_file:
                 yield data
 
+    @abstractmethod
+    def _check_by_id(self, line_of: str, __id: _TKey) -> bool:
+        ...
+
+    @abstractmethod
+    def _get_line_id(self, line_of: str) -> _TKey:
+        ...
+
     @property
     @abstractmethod
     def name(self) -> str:
@@ -134,22 +160,44 @@ class AbstractCollection(Generic[T]):
         ...
 
     @property
+    def master_entity_factory(self) -> MasterEntityFactory[_TMasterEntity, _TKey, T]:
+        ...
+
+    @final
+    @property
+    def master_entity_type(self):
+        return self.master_entity_factory._master_type
+
+    @final
+    @property
     def configuration(
         self,
-    ) -> Optional["CollectionConfiguration[AbstractCollection[T]]"]:
+    ) -> Optional[
+        "CollectionConfiguration[AbstractCollection[_TMasterEntity, _TKey, T]]"
+    ]:
         """Get the configuration of the collection."""
         return self._engine.get_collection_config(self.entity_type)  # type: ignore
 
-    def get_queryable(self) -> CollectionQueryableContext[T]:
-        """Get an queryable context for this collection."""
-        __id = str(uuid4())
-        return CollectionQueryableContext[T](
-            self, self._collection_tmp_path_builder(__id), "rb"
-        )
+    def _get_tracker(self, entity: T) -> EntityTracker[_TKey, T]:
+        """Get the tracker for the given entity."""
+        tracking_id = getattr(entity, "__tracking_id__", None)
+        if tracking_id is None:
+            raise ValueError("The is not tracking.")
+        return self._entity_trackers[tracking_id]
 
-    @staticmethod
-    def _check_by_id(line_of: str, __id: str) -> bool:
-        return line_of[10:46] == __id
+    def _tracked(self, entity: MasterEntity[_TKey, T]) -> EntityTracker[_TKey, T]:
+        """Get the tracker for the given entity."""
+        tracker = EntityTracker(entity.id, entity.slave)
+        setattr(entity.slave, "__tracking_id__", tracker.key)
+        self._entity_trackers[tracker.key] = tracker
+        return tracker
+
+    def _get_as_tracked(self, entity: MasterEntity[_TKey, T]) -> T:
+        """Get the tracker for the given entity."""
+        return self._tracked(entity).entity
+
+    def _create_master_entity(self, entity: T) -> MasterEntity[_TKey, T]:
+        return self.master_entity_factory(entity)
 
     @final
     def _collection_path_builder(self):
@@ -177,10 +225,12 @@ class AbstractCollection(Generic[T]):
                 await self._create_collection()
 
     @final
-    async def _manage_referral_properties(self, entity: TEntity):
-        for prop in entity.get_properties():
+    async def _manage_referral_properties(self, entity: MasterEntity[_TKey, T]):
+        for prop in entity.slave.get_properties():  # type: ignore
             if isinstance(prop, (VirtualComplexProperty, VirtualListProperty)):
-                values: TEntity | list[TEntity] = getattr(entity, prop.actual_name)
+                values: TEntity | list[TEntity] = getattr(
+                    entity.slave, prop.actual_name
+                )
 
                 if not isinstance(values, list):
                     values = [values]
@@ -191,57 +241,19 @@ class AbstractCollection(Generic[T]):
                         if isinstance(virt_prop, ReferenceProperty):
                             if virt_prop.actual_name == prop.refers_to:
                                 virtual_reference_found = True
+
                                 setattr(value, virt_prop.actual_name, entity.id)
 
                                 # get a collection for reference type
                                 col = self._engine.get_collection(prop.type_of_entity)  # type: ignore
 
-                                await col.add(value)  # type: ignore
-                                delattr(entity, prop.actual_name)
+                                col.add(value)  # type: ignore
+                                delattr(entity.slave, prop.actual_name)
+                                await col.save_changes_async()
                     if not virtual_reference_found:
                         raise TypeError(
                             f"No ReferenceProperty found for {prop.refers_to}."
                         )
-
-    @final
-    async def _add_to_file_async(self, entity: T) -> None:
-
-        if not isinstance(entity, self.entity_type):
-            raise TypeError(f"The entity must be of type {self.entity_type.__name__}.")
-
-        if isinstance(entity, TEntity):
-            # Check for reference properties
-            await self._manage_referral_properties(entity)
-        else:
-            raise TypeError("Entity should be an instance of TEntity.")
-
-        async with self._main_file_lock:
-            async with aiofiles.open(self._collection_path_builder(), "a") as f:
-                data = json.dumps(serialize(entity))
-                await f.write(data + "\n")
-
-    @final
-    async def _add_many_to_file_async(self, *entities: T) -> None:
-
-        for e in entities:
-            if not isinstance(e, self.entity_type):
-                raise TypeError(
-                    f"All entities must be of type {self.entity_type.__name__}."
-                )
-
-            if isinstance(e, TEntity):
-                # Check for reference properties
-                await self._manage_referral_properties(e)
-            else:
-                raise TypeError("Entity should be an instance of TEntity.")
-
-        # TODO Add reference stuff here too
-
-        async with self._main_file_lock:
-            async with aiofiles.open(self._collection_path_builder(), "a") as f:
-                for entity in entities:
-                    data = json.dumps(serialize(entity))
-                    await f.write(data + "\n")
 
     @final
     async def _update_async(
@@ -284,12 +296,12 @@ class AbstractCollection(Generic[T]):
             else:
                 os.remove(tmp_path.absolute())
 
-    async def _care_about_virtual_props(self, entity: TEntity):
+    async def _care_about_virtual_props(self, master: MasterEntity[_TKey, T]):
         col_config = self.configuration
         if col_config is None:
             return
 
-        for prop in entity.get_properties():
+        for prop in master.slave.get_properties():  # type: ignore
             if isinstance(prop, (VirtualComplexProperty, VirtualListProperty)):
                 prop_config = col_config.get_property_config(prop.actual_name)
                 if prop_config is None:
@@ -297,59 +309,116 @@ class AbstractCollection(Generic[T]):
 
                 match prop_config.delete_action.value:
                     case "delete_entity":
-                        entity_col = self._engine.get_collection(prop.type_of_entity)
+                        col = self._engine.get_collection(prop.type_of_entity)
+                        async for item in self.iter_referenced_by_async(master.slave, lambda _: prop):  # type: ignore
+                            col.delete(item)
 
-                        async for item in self.iter_referenced_by(entity, lambda _: prop):  # type: ignore
-                            await entity_col.delete(item)
+                        await col.save_changes_async()
 
                     case "delete_reference":
-                        entity_col = self._engine.get_collection(prop.type_of_entity)
-
-                        async for item in self.iter_referenced_by(entity, lambda _: prop):  # type: ignore
+                        async for item in self.iter_referenced_by_async(master.slave, lambda _: prop):  # type: ignore
                             setattr(item, prop.refers_to, None)
-                            await entity_col.update(item)
+
+                        await self._engine.get_collection(
+                            prop.type_of_entity
+                        ).save_changes_async()
 
                     case "ignore":
                         continue
 
-    @final
-    async def _update_entity_async(self, entity: T, delete: bool = False) -> None:
+    async def _save_changes(self):
+        updated_data: dict[str, dict[_TKey, MasterEntity[_TKey, T]]] = {
+            "updated": {},
+            "created": {},
+            "deleted": {},
+        }
+        for key in tuple(self._entity_trackers.keys()):
+            tracked = self._entity_trackers[key]
 
-        if not isinstance(entity, self.entity_type):
-            raise TypeError(f"The entity must be of type {self.entity_type.__name__}.")
+            mastered = self._create_master_entity(tracked.entity)
+            match tracked.tracking_mode:
+                case TrackingMode.DELETE:
+                    mastered.change_id(tracked.key)
+                    updated_data["deleted"][tracked.key] = mastered
+                case TrackingMode.UPDATE:
+                    if tracked.modified:
+                        mastered.change_id(tracked.key)
+                        updated_data["updated"][tracked.key] = mastered
+                case TrackingMode.CREATE:
+                    updated_data["created"][tracked.key] = mastered
 
-        async with self._main_file_lock:
-            file_path = self._collection_path_builder()
-            tmp_path = self._collection_tmp_path_builder()
-            modified = False
-            async with aiofiles.open(file_path, "r") as f:
-                async with aiofiles.open(tmp_path, "w") as tmp_f:
-                    async for line in f:
+        if len(updated_data) > 0:
+            await self._ensure_collection_exists()
+            async with self._main_file_lock:
+                file_path = self._collection_path_builder()
+                tmp_path = self._collection_tmp_path_builder()
+                modified = False
+                tmp_file_created = False
 
-                        if modified:
-                            await tmp_f.write(line)
-                            continue
+                # Deal with add.
+                if updated_data["created"]:
+                    async with aiofiles.open(file_path, "w") as f:
+                        for entity in updated_data["created"].values():
+                            await self._manage_referral_properties(entity)
+                            data = json.dumps(serialize(entity))
+                            await f.write(data + "\n")
 
-                        if Collection._check_by_id(line, entity.id):  # type: ignore
-                            if delete:
-                                await tmp_f.write("")
-                            else:
-                                data = json.dumps(serialize(entity))
-                                await tmp_f.write(data + "\n")
-                            modified = True
-                        else:
-                            await tmp_f.write(line)
+                # Deal with update or delete.
+                if updated_data["deleted"] or updated_data["updated"]:
+                    async with aiofiles.open(file_path, "r") as f:
+                        async with aiofiles.open(tmp_path, "w") as tmp_f:
+                            tmp_file_created = True
+                            async for line in f:
+                                line_id = self._get_line_id(line)
 
-            if modified:
-                os.remove(file_path.absolute())
-                os.rename(tmp_path.absolute(), file_path.absolute())
+                                if line_id in updated_data["deleted"]:
+                                    await tmp_f.write("")
+                                    modified = True
+                                elif line_id in updated_data["updated"]:
+                                    data = json.dumps(
+                                        serialize(updated_data["updated"][line_id])
+                                    )
+                                    await tmp_f.write(data + "\n")
+                                    modified = True
+                                else:
+                                    await tmp_f.write(line)
+                if modified:
+                    os.remove(file_path.absolute())
+                    os.rename(tmp_path.absolute(), file_path.absolute())
 
-                if delete:
-                    await self._care_about_virtual_props(entity)  # type: ignore
-            else:
-                os.remove(tmp_path.absolute())
+                    for entity in updated_data["deleted"].values():
+                        await self._care_about_virtual_props(entity)  # type: ignore
+                else:
+                    if tmp_file_created:
+                        os.remove(tmp_path.absolute())
 
-    async def get(self, __id: str):
+                # clean up trackers
+                for tracking_mode in updated_data.values():
+                    for tracker_key in tracking_mode:
+                        tracker = self._entity_trackers.pop(tracker_key)
+                        delattr(tracker.entity, "__tracking_id__")
+
+    def deserialize(self, data: str) -> Optional[MasterEntity[_TKey, T]]:
+        return deserialize(self.master_entity_type, json.loads(data))
+
+    async def save_changes_async(self):
+        """Saves all changes you have made since last call, including add, update or delete entities."""
+        return await self._save_changes()
+
+    def set_tracking_mode(self, entity: T, mode: TrackingMode):
+        tracker = self._get_tracker(entity)
+        if tracker.tracking_mode == mode:
+            return
+        tracker.set_tracking_mode(mode)
+
+    def get_queryable(self) -> CollectionQueryableContext[_TMasterEntity, _TKey, T]:
+        """Get an queryable context for this collection."""
+        __id = str(uuid4())
+        return CollectionQueryableContext(
+            self, self._collection_tmp_path_builder(__id), "rb"
+        )
+
+    async def get_async(self, __id: _TKey) -> Optional[T]:
         """Get an entity by its id.
 
         Args:
@@ -358,12 +427,13 @@ class AbstractCollection(Generic[T]):
 
         async with self.get_queryable() as tmp_file:
             async for line in tmp_file.iter_lines():
-                if AbstractCollection._check_by_id(line, __id):
-                    data = deserialize(self.entity_type, json.loads(line))
-                    return data
+                if self._check_by_id(line, __id):
+                    data = self.deserialize(line)
+                    if data is not None:
+                        return self._get_as_tracked(data)
         return None
 
-    async def copy_main_file(self, dest_path: Path):
+    async def copy_main_file_async(self, dest_path: Path):
         """Copy the main file to a another file."""
         await self._ensure_collection_exists()
         main_file = self._collection_path_builder()
@@ -372,7 +442,9 @@ class AbstractCollection(Generic[T]):
             shutil.copyfile(main_file.absolute(), dest_path.absolute())
 
     @overload
-    def iterate_by(self, selector: str, __value: Any, /) -> AsyncGenerator[T, None]:
+    def iterate_by_async(
+        self, selector: str, __value: Any, /
+    ) -> AsyncGenerator[T, None]:
         """Iterate over all entities that have a certain property value.
 
         Args:
@@ -383,7 +455,7 @@ class AbstractCollection(Generic[T]):
         ...
 
     @overload
-    def iterate_by(
+    def iterate_by_async(
         self, selector: Callable[[type[T]], _T], __value: _T, /
     ) -> AsyncGenerator[T, None]:
         """Iterate over all entities that have a certain property value.
@@ -394,7 +466,7 @@ class AbstractCollection(Generic[T]):
         """
         ...
 
-    async def iterate_by(
+    async def iterate_by_async(
         self, selector: str | Callable[[type[T]], _T], __value: _T, /
     ) -> AsyncGenerator[T, None]:
         """Iterate over all entities that have a certain property value.
@@ -410,64 +482,48 @@ class AbstractCollection(Generic[T]):
             if isinstance(prop, TProperty):
                 selector = prop.json_property_name or prop.actual_name
 
+        selector = "slave." + selector  # type: ignore
+
         async with self.get_queryable() as tmp_file:
             async for line in tmp_file.iter_lines():
                 for item in ijson.items(line, selector):
                     if item == __value:
-                        data = deserialize(self.entity_type, json.loads(line))
+                        data = self.deserialize(line)
                         if data is not None:
-                            yield data
+                            yield self._get_as_tracked(data)
                         break
 
     @overload
-    def get_first(
+    def get_first_async(
         self, selector: str, __value: Any
     ) -> Coroutine[Any, Any, Optional[T]]:
         """Get the first entity that has a certain property value."""
         ...
 
     @overload
-    def get_first(
+    def get_first_async(
         self, selector: Callable[[type[T]], _T], __value: _T
     ) -> Coroutine[Any, Any, Optional[T]]:
         """Get the first entity that has a certain property value."""
         ...
 
-    async def get_first(
+    async def get_first_async(
         self, selector: str | Callable[[type[T]], _T], __value: _T
     ) -> Optional[T]:
         """Get the first entity that has a certain property value."""
 
-        async for item in self.iterate_by(selector, __value):
+        async for item in self.iterate_by_async(selector, __value):
             return item
         return None
 
-    async def drop(self) -> None:
+    async def drop_async(self) -> None:
         """Drop the collection."""
 
         async with self._main_file_lock:
             if self._collection_exists():
                 os.remove(self._collection_path_builder().absolute())
 
-    async def update(self, entity: T) -> None:
-        """Update an entity in the collection.
-
-        Args:
-            entity (`T`): The entity to update.
-        """
-
-        await self._update_entity_async(entity)
-
-    async def delete(self, entity: T) -> None:
-        """Delete an entity from the collection.
-
-        Args:
-            entity (`T`): The entity to delete.
-        """
-
-        await self._update_entity_async(entity, delete=True)
-
-    async def update_one(
+    async def find_and_update_one_async(
         self, query: Callable[[type[T]], bool], update: Callable[[T], None]
     ) -> None:
         """Update the first entity that matches the query.
@@ -480,7 +536,7 @@ class AbstractCollection(Generic[T]):
         await self._ensure_collection_exists()
         await self._update_async(query, update, one=True)
 
-    async def update_many(
+    async def find_and_update_many_async(
         self, query: Callable[[type[T]], bool], update: Callable[[T], None]
     ) -> None:
         """Update all entities that match the query.
@@ -493,7 +549,7 @@ class AbstractCollection(Generic[T]):
         await self._ensure_collection_exists()
         await self._update_async(query, update, one=False)
 
-    async def delete_one(self, query: Callable[[type[T]], bool]) -> None:
+    async def find_and_delete_one_async(self, query: Callable[[type[T]], bool]) -> None:
         """Delete the first entity that matches the query.
 
         Args:
@@ -503,8 +559,10 @@ class AbstractCollection(Generic[T]):
         await self._ensure_collection_exists()
         await self._update_async(query, one=True)
 
-    async def delete_many(self, query: Callable[[type[T]], bool]) -> None:
-        """Delete all entities that match the query.
+    async def find_and_delete_many_async(
+        self, query: Callable[[type[T]], bool]
+    ) -> None:
+        """Delete all entities that matches the query.
 
         Args:
             query (`Query[T]`): The query to match.
@@ -513,27 +571,52 @@ class AbstractCollection(Generic[T]):
         await self._ensure_collection_exists()
         await self._update_async(query, one=False)
 
-    async def add(self, entity: T) -> T:
+    def delete(self, entity: T) -> EntityTracker[_TKey, T]:
+        """Delete an entity.
+
+        Args:
+            entity (`T`): The entity to delete.
+
+        Returns:
+            `EntityTracker[TKey, T]`: The tracker for the deleted entity.
+        """
+
+        tracked = self._get_tracker(entity)
+        tracked.set_tracking_mode_delete()
+        return tracked
+
+    def delete_many(self, *entities: T) -> list[EntityTracker[_TKey, T]]:
+        """Delete many entities.
+
+        Args:
+            entities (`Iterable[T]`): The entities to delete.
+
+        Returns:
+            `List[EntityTracker[TKey, T]]`: The trackers for the deleted entities.
+        """
+        return [self.delete(x) for x in entities]
+
+    def add(self, entity: T) -> EntityTracker[_TKey, T]:
         """Add an entity to the collection.
 
         Args:
             entity (`T`): The entity to add to the collection.
 
         Returns:
-            `T`: The entity that was added.
+            `EntityTracker[TKey, T]`: The tracker for the added entity.
         """
 
-        await self._ensure_collection_exists()
-        await self._add_to_file_async(entity)
-        return entity
+        mastered = self._create_master_entity(entity)
+        tracking = self._tracked(mastered)
+        tracking.set_tracking_mode_create()
+        return tracking
 
-    async def add_many(self, *entities: T) -> None:
+    def add_range(self, *entities: T) -> list[EntityTracker[_TKey, T]]:
         """Add multiple entities to the collection."""
 
-        await self._ensure_collection_exists()
-        await self._add_many_to_file_async(*entities)
+        return [self.add(entity) for entity in entities]
 
-    async def load_virtual_props(self, entity: T, *props: str):
+    async def load_virtual_props_async(self, entity: T, *props: str):
         """Load all virtual properties based on references."""
 
         if isinstance(entity, TEntity):
@@ -550,7 +633,8 @@ class AbstractCollection(Generic[T]):
 
                     # TODO: Is this performance wise ?
                     results: list[Any] = []
-                    async for item in col.iterate_by(prop.refers_to, entity.id):
+                    tracker = self._get_tracker(entity)
+                    async for item in col.iterate_by_async(prop.refers_to, tracker.key):
                         if except_one:
                             setattr(entity, prop.actual_name, item)
                             return
@@ -560,7 +644,7 @@ class AbstractCollection(Generic[T]):
         else:
             raise TypeError("Entity should be an instance of TEntity.")
 
-    async def iter_referenced_by(
+    async def iter_referenced_by_async(
         self,
         entity: T,
         selector: Callable[[type[T]], Optional[_T] | Optional[list[_T]]],
@@ -578,16 +662,18 @@ class AbstractCollection(Generic[T]):
                 # get a collection for reference type
                 col = self._engine.get_collection(prop.type_of_entity)
 
-                async for item in col.iterate_by(prop.refers_to, entity.id):
+                tracker = self._get_tracker(entity)
+                async for item in col.iterate_by_async(prop.refers_to, tracker.key):
                     yield item  # type: ignore
         else:
             raise TypeError("Entity should be an instance of TEntity.")
 
-    def purge(self):
+    async def purge_async(self):
         """Purge the collection."""
-        os.remove(self._collection_path_builder().absolute())
+        async with self._main_file_lock:
+            os.remove(self._collection_path_builder().absolute())
 
-    async def count(self) -> int:
+    async def count_async(self) -> int:
         """Count the number of entities in the collection."""
 
         await self._ensure_collection_exists()
@@ -598,7 +684,7 @@ class AbstractCollection(Generic[T]):
             return count
 
 
-class Collection(Generic[T], AbstractCollection[T]):
+class Collection(Generic[T], AbstractCollection[UuidMasterEntity, str, T]):
     """A collection of an specified entity type. Acts like a table."""
 
     def __init__(
@@ -613,7 +699,6 @@ class Collection(Generic[T], AbstractCollection[T]):
         """
 
         super().__init__(engine)
-
         if entity_type is None or not isinstance(entity_type, type):  # type: ignore
             raise ValueError("entity_type must be a type")
 
@@ -625,6 +710,13 @@ class Collection(Generic[T], AbstractCollection[T]):
             )
 
         self._entity_type: type[T] = entity_type  # type: ignore
+        self._master_entity_factory = UuidMasterEntityFactory(self._entity_type)
+
+    def _check_by_id(self, line_of: str, __id: str) -> bool:
+        return line_of[10:46] == __id
+
+    def _get_line_id(self, line_of: str) -> str:
+        return line_of[10:46]
 
     @final
     @property
@@ -637,3 +729,7 @@ class Collection(Generic[T], AbstractCollection[T]):
     def entity_type(self) -> type[T]:
         """Get the type of the entity."""
         return self._entity_type
+
+    @property
+    def master_entity_factory(self) -> MasterEntityFactory[UuidMasterEntity, str, T]:
+        return self._master_entity_factory

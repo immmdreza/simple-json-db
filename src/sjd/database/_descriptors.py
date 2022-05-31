@@ -33,12 +33,14 @@ class __Collection__(Generic[T]):
         ...
 
     @overload
-    def __get__(self, obj: object, objtype: type[object]) -> AbstractCollection[T]:
+    def __get__(
+        self, obj: object, objtype: type[object]
+    ) -> AbstractCollection[Any, Any, T]:
         ...
 
     def __get__(
         self, obj: object | None, objtype: type[object] | None = None
-    ) -> "__Collection__[T]" | AbstractCollection[T]:
+    ) -> "__Collection__[T]" | AbstractCollection[Any, Any, T]:
         if obj is None:
             return self
         return cast("Engine", obj).get_collection(self._entity_type)
@@ -47,14 +49,16 @@ class __Collection__(Generic[T]):
         raise AttributeError("Engine collections are read-only.")
 
 
-_TCol = TypeVar("_TCol", bound=AbstractCollection[Any])
+_TCol = TypeVar("_TCol", bound=AbstractCollection[Any, Any, Any])
 
 
 class __Typed_Collection__(Generic[T, _TCol], __Collection__[T]):
     """This is a descriptor of Typed Collection. Can only be used in an engine class as `ClassVar`."""
 
     def __init__(
-        self, entity_type: type[T], collection_type: type[AbstractCollection[T]]
+        self,
+        entity_type: type[T],
+        collection_type: type[AbstractCollection[Any, Any, T]],
     ) -> None:
         """This is a descriptor of Collection."""
         super().__init__(entity_type)

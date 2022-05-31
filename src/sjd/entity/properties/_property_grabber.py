@@ -2,7 +2,8 @@ import inspect
 from types import NoneType
 from typing import Any, Callable, NoReturn, Optional
 
-from .._entity import TEntity, EmbedEntity, TProperty
+from .._entity import TEntity, EmbedEntity
+from .._property import TProperty
 from ...serialization._shared import T
 
 
