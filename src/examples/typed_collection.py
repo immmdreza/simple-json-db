@@ -1,3 +1,6 @@
+# pylint: skip-file
+
+
 import asyncio
 
 from sjd import Engine, Collection, TEntity, properties as props

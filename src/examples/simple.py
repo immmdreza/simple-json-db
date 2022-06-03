@@ -1,3 +1,5 @@
+# pylint: skip-file
+
 import asyncio
 from typing import Optional
 
