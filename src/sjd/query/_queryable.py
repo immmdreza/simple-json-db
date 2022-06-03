@@ -22,6 +22,9 @@ class _Queryable(Generic[T]):
     def where(self, query: Callable[[T], bool]):
         return self._new_query(query)
 
+    def clear_filters(self):
+        self._queries = []
+
 
 class Queryable(Generic[T], Iterable[T], _Queryable[T]):
     def __init__(self, _iterator: Iterable[T], /) -> None:
