@@ -7,6 +7,8 @@ from src.sjd import Engine, TEntity, properties as props
 
 @props.auto_collect()
 class SimpleModel(TEntity):
+    """Simple model with all types"""
+
     def __init__(
         self,
         numeric_field: int,
@@ -21,6 +23,8 @@ class SimpleModel(TEntity):
 
 
 class TestEngine(Engine):
+    """Test engine"""
+
     def __init__(self):
         super().__init__("_test_engine_")
 
@@ -31,6 +35,7 @@ class TestEngine(Engine):
         await self.purge()
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def test_engine() -> TestEngine:
+    """Test engine"""
     return TestEngine()
