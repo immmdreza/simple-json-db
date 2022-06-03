@@ -45,7 +45,7 @@ async def main():
             # Jill
 
         # Prev filter is applied yet
-        all_are_j = await students.all(lambda s: s.first_name.startswith("J"))
+        all_are_j = await students.all_async(lambda s: s.first_name.startswith("J"))
         print(all_are_j)
         # True
 

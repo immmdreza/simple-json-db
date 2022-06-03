@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, AsyncGenerator, Callable, Generic, Optional
+from typing import Any, AsyncGenerator, Callable, Generic, Optional, TypeVar, cast
 from collections.abc import Iterable, AsyncIterable
 
 from ..serialization._shared import T
@@ -108,6 +108,9 @@ class Queryable(Generic[T], Iterable[T], _Queryable[T]):
         return tuple(self)
 
 
+_T = TypeVar("_T", int, float, str, list)
+
+
 class AbstractAsyncQueryable(_Queryable[T], Generic[T], AsyncIterable[T], ABC):
     def __init__(self) -> None:
         super().__init__()
@@ -116,7 +119,13 @@ class AbstractAsyncQueryable(_Queryable[T], Generic[T], AsyncIterable[T], ABC):
     def __aiter__(self) -> AsyncGenerator[T, None]:
         ...
 
-    async def any(self, query: Optional[Callable[[T], bool]] = None) -> bool:
+    async def any_async(self, query: Optional[Callable[[T], bool]] = None) -> bool:
+        """Returns True if any element in the sequence satisfies the condition in the predicate, otherwise False.
+
+        Args:
+            query (`Optional[Callable[[T], bool]]`): The predicate.
+        """
+
         if query is not None:
             self._new_query(query)
 
@@ -125,7 +134,13 @@ class AbstractAsyncQueryable(_Queryable[T], Generic[T], AsyncIterable[T], ABC):
                 return True
         return False
 
-    async def all(self, query: Optional[Callable[[T], bool]] = None) -> bool:
+    async def all_async(self, query: Optional[Callable[[T], bool]] = None) -> bool:
+        """Returns True if all elements in the sequence satisfy the condition in the predicate, otherwise False.
+
+        Args:
+            query (`Optional[Callable[[T], bool]]`): The predicate.
+        """
+
         if query is not None:
             self._new_query(query)
 
@@ -134,7 +149,13 @@ class AbstractAsyncQueryable(_Queryable[T], Generic[T], AsyncIterable[T], ABC):
                 return False
         return True
 
-    async def first(self, query: Optional[Callable[[T], bool]] = None) -> T:
+    async def first_async(self, query: Optional[Callable[[T], bool]] = None) -> T:
+        """Returns the first element in a sequence that satisfies a specified condition.
+
+        Args:
+            query (`Optional[Callable[[T], bool]]`): The predicate.
+        """
+
         if query is not None:
             self._new_query(query)
 
@@ -144,9 +165,16 @@ class AbstractAsyncQueryable(_Queryable[T], Generic[T], AsyncIterable[T], ABC):
 
         raise StopIteration()
 
-    async def first_or_default(
-        self, query: Optional[Callable[[T], bool]] = None, default: Any = None
+    async def first_or_default_async(
+        self, query: Optional[Callable[[T], bool]] = None, default: Optional[T] = None
     ) -> Optional[T]:
+        """Returns the first element in a sequence that satisfies a specified condition or a default value if no such element is found.
+
+        Args:
+            query (`Optional[Callable[[T], bool]]`): The predicate.
+            default (`Optional[T]`): The default value.
+        """
+
         if query is not None:
             self._new_query(query)
 
@@ -155,7 +183,13 @@ class AbstractAsyncQueryable(_Queryable[T], Generic[T], AsyncIterable[T], ABC):
                 return x
         return default
 
-    async def single(self, query: Optional[Callable[[T], bool]] = None) -> T:
+    async def single_async(self, query: Optional[Callable[[T], bool]] = None) -> T:
+        """Returns the only element of a sequence that satisfies a specified condition, and throws an exception if more than one such element exists.
+
+
+        Args:
+            query (`Optional[Callable[[T], bool]]`): The predicate.
+        """
         if query is not None:
             self._new_query(query)
 
@@ -171,9 +205,16 @@ class AbstractAsyncQueryable(_Queryable[T], Generic[T], AsyncIterable[T], ABC):
             return r
         raise ValueError("No element were found.")
 
-    async def single_or_default(
-        self, query: Optional[Callable[[T], bool]] = None, default: Any = None
+    async def single_or_default_async(
+        self, query: Optional[Callable[[T], bool]] = None, default: Optional[T] = None
     ) -> Optional[T]:
+        """Returns the only element of a sequence that satisfies a specified condition or a default value if no such element is found.
+
+        Args:
+            query (`Optional[Callable[[T], bool]]`): The predicate.
+            default (`Optional[T]`): The default value.
+        """
+
         if query is not None:
             self._new_query(query)
 
@@ -189,11 +230,71 @@ class AbstractAsyncQueryable(_Queryable[T], Generic[T], AsyncIterable[T], ABC):
             return r
         return default
 
-    async def to_list(self) -> list[T]:
+    async def to_list_async(self) -> list[T]:
+        """Converts the sequence to a list."""
         return [x async for x in self]
 
-    async def to_tuple(self) -> tuple[T, ...]:
+    async def to_tuple_async(self) -> tuple[T, ...]:
+        """Converts the sequence to a tuple."""
         return tuple([x async for x in self])
+
+    async def count_async(self, query: Optional[Callable[[T], bool]] = None) -> int:
+        """Returns the number of elements in a sequence that satisfy a condition.
+
+        Args:
+            query (`Optional[Callable[[T], bool]]`): The predicate.
+        """
+
+        if query is not None:
+            self._new_query(query)
+
+        count = 0
+        async for x in self:
+            if self._check(x):
+                count += 1
+        return count
+
+    async def reduce_async(
+        self,
+        selector: Callable[[T], _T],
+        func: Callable[[_T, _T], _T],
+        initial: Optional[_T] = None,
+        query: Optional[Callable[[T], bool]] = None,
+    ) -> _T:
+        """Reduces the sequence to a single value by calling a function on each element in the sequence and passing the previous result and the current element to the function.
+
+        Args:
+            selector (`Callable[[T], _T]`): The selector.
+            func (`Callable[[_T, _T], _T]`): The function.
+            initial (`Optional[_T]`): The initial value.
+            query (`Optional[Callable[[T], bool]]`): The predicate.
+        """
+
+        if query is not None:
+            self._new_query(query)
+
+        r = initial
+        async for x in self:
+            if r is None:
+                r = selector(x)
+            else:
+                r = func(r, selector(x))
+        return cast(_T, r)
+
+    async def sum_by_async(
+        self,
+        selector: Callable[[T], _T],
+        initial: Optional[_T] = None,
+        query: Optional[Callable[[T], bool]] = None,
+    ) -> _T:
+        """Returns the sum of the elements in a sequence.
+
+        Args:
+            selector (`Callable[[T], _T]`): The selector.
+            initial (`Optional[_T]`): The initial value.
+            query (`Optional[Callable[[T], bool]]`): The predicate.
+        """
+        return await self.reduce_async(selector, lambda x, y: x + y, initial, query)
 
 
 class AsyncQueryable(Generic[T], AbstractAsyncQueryable[T]):
@@ -203,5 +304,4 @@ class AsyncQueryable(Generic[T], AbstractAsyncQueryable[T]):
 
     async def __aiter__(self) -> AsyncGenerator[T, None]:
         async for x in self._iterator:
-            if self._check(x):
-                yield x
+            yield x

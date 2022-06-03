@@ -1,11 +1,9 @@
 from enum import Enum
-from typing import Generic, TypeVar
+from typing import Generic
 
 from ..serialization._shared import T
 from ..serialization import serialize
-
-
-_TKey = TypeVar("_TKey")
+from ..entity._master_entity import MasterEntity, _TKey
 
 
 class TrackingMode(Enum):
@@ -18,11 +16,14 @@ class TrackingMode(Enum):
 
 
 class EntityTracker(Generic[_TKey, T]):
-    def __init__(self, key: _TKey, entity_to_track: T) -> None:
-        self._key = key
-        self._entity_to_track = entity_to_track
+    def __init__(
+        self, key: _TKey, master_entity_to_track: MasterEntity[_TKey, T]
+    ) -> None:
+        self._key: _TKey = key
+        self._master_entity: MasterEntity[_TKey, T] = master_entity_to_track
+        self._entity_to_track = master_entity_to_track.slave
         self._latest_serialized_data = None
-        self._initial_schema = serialize(entity_to_track)
+        self._initial_schema = serialize(self._entity_to_track)
         self._tracking_mode = TrackingMode.UPDATE
 
     @property
@@ -46,6 +47,10 @@ class EntityTracker(Generic[_TKey, T]):
     @property
     def tracking_mode(self) -> TrackingMode:
         return self._tracking_mode
+
+    @property
+    def master_entity(self) -> MasterEntity[_TKey, T]:
+        return self._master_entity
 
     def set_tracking_mode_delete(self) -> None:
         self._tracking_mode = TrackingMode.DELETE

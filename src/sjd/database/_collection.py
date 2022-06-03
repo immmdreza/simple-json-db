@@ -76,13 +76,12 @@ class CollectionQueryableContext(
         async for line in self.iter_lines():
             obj = self._collection.deserialize(line)
             if obj is not None:
-                if self._check(obj.slave):
-                    tracked = self._collection._get_as_tracked(obj)
-                    if self._include_props:
-                        await self._collection.load_virtual_props_async(
-                            obj.slave, *self._include_props
-                        )
-                    yield cast(T, tracked)
+                tracked = self._collection._get_as_tracked(obj)
+                if self._include_props:
+                    await self._collection.load_virtual_props_async(
+                        obj.slave, *self._include_props
+                    )
+                yield cast(T, tracked)
 
     async def __aenter__(self):
         if not self._initialized:
@@ -202,7 +201,7 @@ class AbstractCollection(Generic[_TMasterEntity, _TKey, T], ABC):
 
     def _tracked(self, entity: MasterEntity[_TKey, T]) -> EntityTracker[_TKey, T]:
         """Get the tracker for the given entity."""
-        tracker = EntityTracker(entity.id, entity.slave)
+        tracker = EntityTracker(entity.id, entity)
         setattr(entity.slave, "__tracking_id__", tracker.key)
         self._entity_trackers[tracker.key] = tracker
         return tracker
@@ -341,7 +340,7 @@ class AbstractCollection(Generic[_TMasterEntity, _TKey, T], ABC):
                     case "ignore":
                         continue
 
-    async def _save_changes(self):
+    async def _save_changes(self) -> int:
         updated_data: dict[str, dict[_TKey, MasterEntity[_TKey, T]]] = {
             "updated": {},
             "created": {},
@@ -350,18 +349,16 @@ class AbstractCollection(Generic[_TMasterEntity, _TKey, T], ABC):
         for key in tuple(self._entity_trackers.keys()):
             tracked = self._entity_trackers[key]
 
-            mastered = self._create_master_entity(tracked.entity)
             match tracked.tracking_mode:
                 case TrackingMode.DELETE:
-                    mastered.change_id(tracked.key)
-                    updated_data["deleted"][tracked.key] = mastered
+                    updated_data["deleted"][tracked.key] = tracked.master_entity
                 case TrackingMode.UPDATE:
                     if tracked.modified:
-                        mastered.change_id(tracked.key)
-                        updated_data["updated"][tracked.key] = mastered
+                        updated_data["updated"][tracked.key] = tracked.master_entity
                 case TrackingMode.CREATE:
-                    updated_data["created"][tracked.key] = mastered
+                    updated_data["created"][tracked.key] = tracked.master_entity
 
+        changes_made_count = 0
         if len(updated_data) > 0:
             await self._ensure_collection_exists()
             async with self._main_file_lock:
@@ -377,6 +374,7 @@ class AbstractCollection(Generic[_TMasterEntity, _TKey, T], ABC):
                             await self._manage_referral_properties(entity)
                             data = json.dumps(serialize(entity))
                             await f.write(data + "\n")
+                            changes_made_count += 1
 
                 # Deal with update or delete.
                 if updated_data["deleted"] or updated_data["updated"]:
@@ -389,12 +387,14 @@ class AbstractCollection(Generic[_TMasterEntity, _TKey, T], ABC):
                                 if line_id in updated_data["deleted"]:
                                     await tmp_f.write("")
                                     modified = True
+                                    changes_made_count += 1
                                 elif line_id in updated_data["updated"]:
                                     data = json.dumps(
                                         serialize(updated_data["updated"][line_id])
                                     )
                                     await tmp_f.write(data + "\n")
                                     modified = True
+                                    changes_made_count += 1
                                 else:
                                     await tmp_f.write(line)
                 if modified:
@@ -412,11 +412,12 @@ class AbstractCollection(Generic[_TMasterEntity, _TKey, T], ABC):
                     for tracker_key in tracking_mode:
                         tracker = self._entity_trackers.pop(tracker_key)
                         delattr(tracker.entity, "__tracking_id__")
+        return changes_made_count
 
     def deserialize(self, data: str) -> Optional[MasterEntity[_TKey, T]]:
         return deserialize(self.master_entity_type, json.loads(data))
 
-    async def save_changes_async(self):
+    async def save_changes_async(self) -> int:
         """Saves all changes you have made since last call, including add, update or delete entities."""
         return await self._save_changes()
 
@@ -727,11 +728,15 @@ class Collection(Generic[T], AbstractCollection[UuidMasterEntity, str, T]):
         self._master_entity_factory = UuidMasterEntityFactory(self._entity_type)
         super().__init__(engine)
 
-    def _check_by_id(self, line_of: str, __id: str) -> bool:
-        return line_of[10:46] == __id
+    def _check_by_id(self, line_of: str | bytes, __id: str) -> bool:
+        __found = self._get_line_id(line_of)
+        return __found == __id
 
-    def _get_line_id(self, line_of: str) -> str:
-        return line_of[10:46]
+    def _get_line_id(self, line_of: str | bytes) -> str:
+        if isinstance(line_of, str):
+            return line_of[10:46]
+        else:
+            return line_of[10:46].decode()
 
     @final
     @property
