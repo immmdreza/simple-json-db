@@ -13,6 +13,7 @@ _TMasterEntity = TypeVar("_TMasterEntity", bound="MasterEntity")
 
 
 class MasterEntity(Generic[_TKey, T], Serializable, ABC):
+    """The master of any entity that keeps an entity along with an id."""
 
     slave_entity_type: type[T]
 
@@ -30,7 +31,8 @@ class MasterEntity(Generic[_TKey, T], Serializable, ABC):
         return serialize(self)
 
     @property
-    def id(self):
+    def id(self):  # pylint: disable=invalid-name
+        """The unique key of the entity."""
         return self.__id
 
     @classmethod
@@ -39,27 +41,33 @@ class MasterEntity(Generic[_TKey, T], Serializable, ABC):
     ) -> Optional[_TMasterEntity]:
         return deserialize(cls, data)
 
-    def change_id(self, new_id: _TKey) -> None:
-        self.__id = new_id
+    @classmethod
+    def set_id_property(cls: type[_TMasterEntity], id_property: TProperty[_TKey]):
+        """Set the id property of the master entity."""
+        cls.__id = id_property
 
     @abstractmethod
     def __generate_key__(self) -> _TKey:
         ...
 
 
-def get_master_entity_clone(Base: type[_TMasterEntity]) -> type[_TMasterEntity]:
-    class __Result(Base):  # type: ignore
+def _clone_master_entity(base: type[_TMasterEntity]) -> type[_TMasterEntity]:
+    class _Result(base):  # type: ignore
         pass
 
-    return __Result
+    return _Result
 
 
 class MasterEntityFactory(Generic[_TMasterEntity, _TKey, T]):
+    """A factory for MasterEntity."""
+
     def __init__(
         self, master_type: type[_TMasterEntity], slave_entity_type: type[T]
     ) -> None:
+        """Initialize a new MasterEntityFactory."""
+
         self._slave_entity_type = slave_entity_type
-        self._master_type = get_master_entity_clone(master_type)
+        self._master_type = _clone_master_entity(master_type)
         self._master_type.slave = TProperty(
             self._slave_entity_type,
             init=True,
@@ -68,10 +76,11 @@ class MasterEntityFactory(Generic[_TMasterEntity, _TKey, T]):
             actual_name="_MasterEntity_slave",
             json_property_name="slave",
         )
-        self._master_type.__id = self.__get_property__()
+        self._master_type.set_id_property(self.__get_property__())
 
     @property
     def master_entity_type(self):
+        """The type of the master entity."""
         return self._master_type
 
     @abstractmethod
@@ -83,14 +92,15 @@ class MasterEntityFactory(Generic[_TMasterEntity, _TKey, T]):
 
 
 class UuidMasterEntity(MasterEntity[str, T]):
-    def __init__(self, slave_entity: Optional[T] = None) -> None:
-        super().__init__(slave_entity)
+    """A master entity based on uuid."""
 
     def __generate_key__(self) -> str:
         return str(uuid.uuid4())
 
 
 class UuidMasterEntityFactory(MasterEntityFactory[UuidMasterEntity, str, T]):
+    """A factory for `UuidMasterEntity`."""
+
     def __init__(self, slave_entity_type: type[T]) -> None:
         super().__init__(UuidMasterEntity, slave_entity_type)
 

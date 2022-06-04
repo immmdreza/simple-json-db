@@ -2,7 +2,7 @@ import inspect
 from types import NoneType
 from typing import Any, Callable, NoReturn, Optional
 
-from .._entity import TEntity, EmbedEntity
+from .._entity import TEntity, EmbeddedEntity
 from .._property import TProperty
 from ...serialization._shared import T
 
@@ -14,7 +14,7 @@ VALID_TYPES = (  # type: ignore
     bool,
     list,
     TEntity,
-    EmbedEntity,
+    EmbeddedEntity,
 )
 
 
@@ -26,7 +26,7 @@ def __resolve_type(
 
     try:
         if issubclass(annotation, VALID_TYPES):
-            is_complex = issubclass(annotation, (TEntity, EmbedEntity))
+            is_complex = issubclass(annotation, (TEntity, EmbeddedEntity))
             return (annotation, optional, False, is_complex)  # type: ignore
         __raise()
     except TypeError:

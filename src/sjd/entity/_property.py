@@ -27,12 +27,18 @@ class TProperty(Generic[T], ABC):
         """Initialize a new TProperty.
 
         Args:
-            _type_of_entity (`type[Any]`): The type of the entity that is stored in the property.
-            required (`bool`, optional): Whether the property is required. Defaults to False.
-            json_property_name (`Optional[str]`, optional): The name of the property in the JSON object. Defaults to None.
-            is_list (`bool`, optional): Whether the property is a list. Defaults to False.
-            is_complex (`bool`, optional): Whether the property is a complex value. Defaults to False.
-            default_factory (`Optional[Callable[[], Optional[T]]]`, optional): A function that returns a default value for the property. Defaults to None.
+            _type_of_entity (`type[Any]`): The type of the entity that is stored
+            in the property.
+            required (`bool`, optional): Whether the property is required.
+            Defaults to False.
+            json_property_name (`Optional[str]`, optional): The name of the property
+            in the JSON object. Defaults to None.
+            is_list (`bool`, optional): Whether the property is a list. Defaults
+            to False.
+            is_complex (`bool`, optional): Whether the property is a complex value.
+            Defaults to False.
+            default_factory (`Optional[Callable[[], Optional[T]]]`, optional):
+            A function that returns a default value for the property. Defaults to None.
         """
 
         self._init = init
@@ -64,7 +70,8 @@ class TProperty(Generic[T], ABC):
 
         if self._actual_name is None:
             raise AttributeError(
-                "Attribute is not initialized! Did you missed __init__ or super().__init__ inside it?"
+                "Attribute is not initialized! Did you missed __init__"
+                " or super().__init__ inside it?"
             )
 
         return cast(T, obj.__dict__[self._actual_name])
@@ -73,7 +80,8 @@ class TProperty(Generic[T], ABC):
 
         if self._actual_name is None:
             raise AttributeError(
-                "Attribute is not initialized! Did you missed __init__ or super().__init__ inside it?"
+                "Attribute is not initialized! Did you missed __init__"
+                " or super().__init__ inside it?"
             )
 
         obj.__dict__[self._actual_name] = value
@@ -82,16 +90,15 @@ class TProperty(Generic[T], ABC):
 
         if self._actual_name is None:
             raise AttributeError(
-                "Attribute is not initialized! Did you missed __init__ or super().__init__ inside it?"
+                "Attribute is not initialized! Did you missed __init__"
+                " or super().__init__ inside it?"
             )
 
         del obj.__dict__[self._actual_name]
 
-    def update_access_trail(self, *names: str) -> None:
-        self._access_trail = names
-
     @property
     def init(self):
+        """`bool`: Whether the property should be included inside `__init__`."""
         return self._init
 
     @property
@@ -110,7 +117,8 @@ class TProperty(Generic[T], ABC):
 
         if self._actual_name is None:
             raise AttributeError(
-                "Attribute is not initialized! Did you missed __init__ or super().__init__ inside it?"
+                "Attribute is not initialized! Did you missed __init__"
+                " or super().__init__ inside it?"
             )
 
         return self._actual_name
@@ -137,11 +145,12 @@ class TProperty(Generic[T], ABC):
 
     @property
     def is_virtual(self) -> bool:
-        """Whether the property is virtual."""
+        """`bool`: Whether the property is virtual."""
         return getattr(self, "__virtual__", False)
 
     def optional(self):
-        """Returns a clone of the property with the required flag set to False and hints as optional."""
+        """Returns a clone of the property with the required flag set to False
+        and hints as optional."""
 
         if self.required:
             raise ValueError(

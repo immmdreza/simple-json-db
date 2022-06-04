@@ -3,7 +3,14 @@ from ..serialization._shared import T
 
 
 class Query(Generic[T]):
+    """A query is a function that takes an object and returns a boolean."""
+
     def __init__(self, query: Callable[[T], bool]) -> None:
+        """Create a new query.
+
+        Args:
+            query (`Callable[[T], bool]`): The query function.
+        """
         self._query = query
 
     def check(self, against: T):

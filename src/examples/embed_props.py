@@ -3,10 +3,10 @@
 import asyncio
 from pathlib import Path
 
-from sjd import TEntity, EmbedEntity, Engine, properties as props
+from sjd import TEntity, EmbeddedEntity, Engine, properties as props
 
 
-class Grade(EmbedEntity):
+class Grade(EmbeddedEntity):
     __json_init__ = True
 
     course_id = props.integer(required=True)

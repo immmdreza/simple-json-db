@@ -3,7 +3,6 @@ import inspect
 from typing import Any, ClassVar, Generator, final
 
 from ._property import TProperty
-from ..serialization._serializable import Serializable
 
 
 def _get_properties(entity: type[Any]) -> Generator[TProperty[Any], None, None]:
@@ -28,7 +27,7 @@ class TEntity(ABC):
         return _get_properties(cls)
 
 
-class EmbedEntity(ABC):
+class EmbeddedEntity(ABC):
     """Abstract template class for embed entities."""
 
     __json_init__: ClassVar[bool] = False

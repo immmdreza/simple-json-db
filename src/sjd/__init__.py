@@ -1,11 +1,11 @@
 from .database import Engine, Collection
-from .entity import TEntity, EmbedEntity, properties
+from .entity import TEntity, EmbeddedEntity, properties
 
 
 __all__ = [
     "Engine",
     "Collection",
     "TEntity",
-    "EmbedEntity",
+    "EmbeddedEntity",
     "properties",
 ]

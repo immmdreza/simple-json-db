@@ -1,6 +1,6 @@
 from typing import Optional
 
-from src.sjd import TEntity, EmbedEntity
+from src.sjd import TEntity, EmbeddedEntity
 from src.sjd.entity.properties._property_grabber import auto_collect
 from src.sjd.serialization import serialize, deserialize
 
@@ -9,7 +9,7 @@ def test_1():
     class Grade(TEntity):
         pass
 
-    class Info(EmbedEntity):
+    class Info(EmbeddedEntity):
         pass
 
     # Create a model to store.

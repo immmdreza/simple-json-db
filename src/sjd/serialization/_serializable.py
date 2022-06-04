@@ -12,10 +12,7 @@ class Serializable(ABC):
         """
         Serialize the entity.
         """
-        ...
-
-    def serialize(self):
-        return self.__serialize__()
+        ...  # pylint: disable=unnecessary-ellipsis
 
     @classmethod
     @abstractmethod
@@ -23,4 +20,8 @@ class Serializable(ABC):
         """
         Deserialize the entity.
         """
-        ...
+        ...  # pylint: disable=unnecessary-ellipsis
+
+    def serialize(self):
+        """Serialize the entity."""
+        return self.__serialize__()
