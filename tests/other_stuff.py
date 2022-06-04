@@ -1,5 +1,3 @@
-from typing import Any
-
 import pytest
 
 from src.sjd import Engine, TEntity, properties as props
@@ -27,12 +25,6 @@ class TestEngine(Engine):
 
     def __init__(self):
         super().__init__("_test_engine_")
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any):
-        await self.purge()
 
 
 @pytest.fixture(scope="function")

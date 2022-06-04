@@ -1,3 +1,6 @@
+# pylint: skip-file
+# flake8: noqa
+
 from typing import Optional
 
 from src.sjd import TEntity, EmbeddedEntity

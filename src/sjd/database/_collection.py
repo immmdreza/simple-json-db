@@ -714,6 +714,10 @@ class AbstractCollection(Generic[_TMasterEntity, _TKey, T], ABC):
                 count += 1
             return count
 
+    def resolve_tracked_entity_id(self, entity: T) -> Optional[_TKey]:
+        """Resolve an entity's id if it's tracked."""
+        return getattr(entity, "__tracking_id__", None)
+
 
 class Collection(Generic[T], AbstractCollection[UuidMasterEntity, str, T]):
     """A collection of an specified entity type. Acts like a table."""
