@@ -59,11 +59,11 @@ def __grab_props(__init__: Callable[..., Any]):
     if __init__.__name__ != "__init__":
         raise ValueError("Not an __init__ methods.")
 
-    for k, v in sign.parameters.items():
-        if k == "self":
+    for key, value in sign.parameters.items():
+        if key == "self":
             continue
-        annotation = v.annotation
-        yield k, *__resolve_type(k, annotation)
+        annotation = value.annotation
+        yield key, *__resolve_type(key, annotation)
 
 
 def auto_collect(

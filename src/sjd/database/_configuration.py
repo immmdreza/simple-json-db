@@ -4,7 +4,7 @@ from typing import Any, Callable, Generic, Optional, TypeVar, TYPE_CHECKING
 
 from ..entity._property import TProperty
 from ..serialization._shared import T
-from ._descriptors import __Collection__, _TCol  # type: ignore
+from ._descriptors import _Collection, _TCol
 from ._collection import AbstractCollection
 
 if TYPE_CHECKING:
@@ -14,6 +14,8 @@ _TEngine = TypeVar("_TEngine", bound="Engine")
 
 
 class DeleteAction(Enum):
+    """The action to be taken when a record is deleted."""
+
     DELETE_ENTITY = "delete_entity"
     """ Deletes all virtual entities associated with the entity. """
     DELETE_REFERENCE = "delete_reference"
@@ -23,19 +25,23 @@ class DeleteAction(Enum):
 
     @property
     def ignore(self) -> bool:
+        """Returns True if the action is to ignore the virtual entities."""
         return self == DeleteAction.IGNORE
 
     @property
     def delete_reference(self) -> bool:
+        """Returns True if the action is to delete the reference property."""
         return self == DeleteAction.DELETE_REFERENCE
 
     @property
     def delete_entity(self) -> bool:
+        """Returns True if the action is to delete the entity."""
         return self == DeleteAction.DELETE_ENTITY
 
 
 @dataclasses.dataclass(repr=True)
 class PropertyConfiguration:
+    """Configuration of a property"""
 
     delete_action: DeleteAction = DeleteAction.IGNORE
 
@@ -43,6 +49,7 @@ class PropertyConfiguration:
         self._property = property_
 
     def set_delete_action(self, action: DeleteAction) -> "PropertyConfiguration":
+        """Sets the delete action for the property."""
         if not self._property.is_virtual:
             raise ValueError(
                 f"Property {self._property.actual_name} is not virtual. "
@@ -52,11 +59,13 @@ class PropertyConfiguration:
         return self
 
     def delete_whole_reference(self) -> "PropertyConfiguration":
-        """Indicates if the entity which this property referees to should be deleted when current entity is deleted."""
+        """Indicates if the entity which this property referees to should be deleted
+        when current entity is deleted."""
         return self.set_delete_action(DeleteAction.DELETE_ENTITY)
 
     def delete_reference_prop(self) -> "PropertyConfiguration":
-        """Indicates if the reference property should be deleted ( from reference entity ) when current entity is deleted."""
+        """Indicates if the reference property should be deleted ( from reference entity )
+        when current entity is deleted."""
         return self.set_delete_action(DeleteAction.DELETE_REFERENCE)
 
 
@@ -94,7 +103,8 @@ class CollectionConfiguration(Generic[T]):
                 return self
             else:
                 raise ValueError(
-                    f"The selector {selector} returned {selected} which is not a property."
+                    f"The selector {selector} returned {selected}"
+                    " which is not a property."
                 )
         raise ValueError(f"The selector {selector} returned None.")
 
@@ -128,13 +138,15 @@ class EngineConfiguration(Generic[_TEngine]):
         """Configure a collection that is registered with the engine.
 
         Args:
-            selector (`Callable[[Engine], AbstractCollection[T]]`): The selector that returns the collection.
-            configure (`Callable[[CollectionConfiguration[T]], Any]`): The configuration function.
+            selector (`Callable[[Engine], AbstractCollection[T]]`):
+            The selector that returns the collection.
+            configure (`Callable[[CollectionConfiguration[T]], Any]`):
+            The configuration function.
         """
 
         col = selector(self._engine_type)  # type: ignore
         if col is not None:
-            if isinstance(col, __Collection__):
+            if isinstance(col, _Collection):
                 if col.entity_type in self._collection_configs:
                     self._collection_configs[col.entity_type] = configure(
                         self._collection_configs[col.entity_type]  # type: ignore

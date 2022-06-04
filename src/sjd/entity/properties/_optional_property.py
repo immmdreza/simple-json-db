@@ -21,12 +21,19 @@ class OptionalProperty(TProperty[Optional[T]]):
         """A property that is optional (required=False).
 
         Args:
-            _type_of_entity (`type[T]`): The type of the entity that this property belongs to.
-            init (`bool`, optional): Whether this property should be initialized when the entity is created. Defaults to True.
-            json_property_name (`Optional[str]`, optional): The name of the property in JSON. Defaults to None.
-            is_list (`bool`, optional): Whether this property is a list. Defaults to False.
-            is_complex (`bool`, optional): Whether this property is a complex object. Defaults to False.
-            default_factory (`Optional[Callable[[], Optional[T]]]`, optional): A function that returns the default value of this property. Defaults to None.
+            _type_of_entity (`type[T]`): The type of the entity that
+            this property belongs to.
+            init (`bool`, optional): Whether this property should be initialized
+            when the entity is created. Defaults to True.
+            json_property_name (`Optional[str]`, optional): The name of
+            the property in JSON. Defaults to None.
+            is_list (`bool`, optional): Whether this property is a list.
+            Defaults to False.
+            is_complex (`bool`, optional): Whether this property is a complex object.
+            Defaults to False.
+            default_factory (`Optional[Callable[[], Optional[T]]]`, optional):
+            A function that returns the default value of this property.
+            Defaults to None.
         """
 
         super().__init__(

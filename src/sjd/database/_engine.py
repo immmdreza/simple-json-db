@@ -6,18 +6,24 @@ from typing import Any, Optional, TypeVar, final
 from ..entity import TEntity
 from ..serialization._shared import T
 from ._collection import AbstractCollection, Collection
-from ._descriptors import __Collection__, __Typed_Collection__, _TCol  # type: ignore
+from ._descriptors import _Collection, _TypedCollection, _TCol  # type: ignore
 from ._configuration import EngineConfiguration, CollectionConfiguration
 
 
 class EngineNotInitialized(Exception):
+    """This exception is raised when the engine is not initialized."""
+
     def __init__(self) -> None:
         super().__init__(
-            "Engine is not initialized! Did you missed __init__ or super().__init__ inside it?"
+            "Engine is not initialized! Did you missed __init__ or super().__init__"
+            " inside it?"
         )
 
 
 class CollectionEntityTypeDuplicated(Exception):
+    """This exception is raised when the entity type is
+    duplicated in the collection."""
+
     def __init__(self, collection_name: str, entity_type: type[Any]) -> None:
         super().__init__(
             f"Collection {collection_name} already has entity type {entity_type}"
@@ -25,9 +31,12 @@ class CollectionEntityTypeDuplicated(Exception):
 
 
 class CollectionNotRegistered(Exception):
+    """This exception is raised when the collection is not registered."""
+
     def __init__(self, collection_name: str) -> None:
         super().__init__(
-            f"Collection {collection_name} is not registered. Did you done something wired?"
+            f"Collection {collection_name} is not registered."
+            " Did you done something wired?"
         )
 
 
@@ -37,12 +46,14 @@ _TEngine = TypeVar("_TEngine", bound="Engine")
 class Engine:
     """Initializes the engine.
 
-    Base of everything that you gonna use, Should be used as base class of your engine"""
+    Base of everything that you gonna use,
+    Should be used as base class of your engine"""
 
     def __init__(self, base_path: Path | str):
         """Initializes the engine.
 
-        Base of everything that you gonna use, Should be used as base class of your engine
+        Base of everything that you gonna use, Should be used as
+        base class of your engine
 
         Args:
             base_path (`Path` | `str`): The base path of the engine.
@@ -74,10 +85,12 @@ class Engine:
 
     def __set_collections(self):
         for _, col in inspect.getmembers(type(self)):
-            if isinstance(col, __Typed_Collection__):
+            if isinstance(col, _TypedCollection):
                 self.register_typed_collection(col.collection_type)  # type: ignore
-            elif isinstance(col, __Collection__):
-                self.register_collection(col.entity_type, col.collection_name)  # type: ignore
+            elif isinstance(col, _Collection):
+                self.register_collection(
+                    col.entity_type, col.collection_name
+                )  # type: ignore
 
     def __initialize_path(self, path: Path):
         if not path.exists():
@@ -105,7 +118,6 @@ class Engine:
         if collection.entity_type not in self.__collections:
             raise CollectionNotRegistered(collection.name)
 
-        """Returns the base path of the engine."""
         return self._base_path
 
     @final
@@ -119,7 +131,8 @@ class Engine:
             `EngineNotInitialized`: If the engine is not initialized.
 
         Returns:
-            `Optional[Collection[T]]`: The collection of the entity type. `None` if not found.
+            `Optional[Collection[T]]`: The collection of the entity type.
+            `None` if not found.
         """
         if not self.__initialized:
             raise EngineNotInitialized()
@@ -141,7 +154,8 @@ class Engine:
 
         Args:
             entity_type (`type[T]`): The entity type of the collection.
-            name (`Optional[str]`, optional): The name of the collection. Defaults to `Type.__name__`.
+            name (`Optional[str]`, optional): The name of the collection.
+            Defaults to `Type.__name__`.
 
         Raises:
             `EngineNotInitialized`: If the engine is not initialized.
@@ -167,12 +181,18 @@ class Engine:
     def register_typed_collection(
         self, collection: type[AbstractCollection[Any, Any, T]]
     ) -> AbstractCollection[Any, Any, T]:
+        """Manually registers a typed collection.
+
+        Args:
+            collection (`type[Collection[T]]`): The collection type.
+        """
+
         if not self.__initialized:
             raise EngineNotInitialized()
 
         col = collection(self)
 
-        if col.entity_type is None or not issubclass(col.entity_type, TEntity):  # type: ignore
+        if col.entity_type is None or not issubclass(col.entity_type, TEntity):
             raise ValueError("entity_type must be a TEntity.")
 
         if col.entity_type in self.__collections:
@@ -182,22 +202,23 @@ class Engine:
 
     @final
     @staticmethod
-    def set(entity_type: type[T]) -> __Collection__[T]:
+    def set(entity_type: type[T]) -> _Collection[T]:
         """Sets a collection (staticmethod).
 
         Args:
             entity_type (`type[T]`): The entity type of the collection.
 
         Returns:
-            `__Collection__[T]`: The descriptor of the collection. can only be used as an engine's `ClassVar`.
+            `__Collection__[T]`: The descriptor of the collection.
+            can only be used as an engine's `ClassVar`.
         """
-        return __Collection__[T](entity_type)
+        return _Collection[T](entity_type)
 
     @final
     @staticmethod
     def typed_set(
         entity_type: type[T], collection_type: type[_TCol]
-    ) -> __Typed_Collection__[T, _TCol]:
+    ) -> _TypedCollection[T, _TCol]:
         """Sets a typed collection (staticmethod).
 
         Args:
@@ -205,9 +226,10 @@ class Engine:
             collection_type (`type[_TCol]`): The type of your collection.
 
         Returns:
-            `__Typed_Collection__[T, _TCol]`: The descriptor of the collection. can only be used as an engine's `ClassVar`.
+            `__Typed_Collection__[T, _TCol]`: The descriptor of the collection.
+            can only be used as an engine's `ClassVar`.
         """
-        return __Typed_Collection__[T, _TCol](entity_type, collection_type)
+        return _TypedCollection[T, _TCol](entity_type, collection_type)
 
     def get_collection_config(
         self, _entity_type: type[_TCol]

@@ -16,9 +16,12 @@ class FloatProperty(TProperty[float]):
         """Initialize a new IntProperty.
 
         Args:
-            json_property_name (`Optional[str]`, optional): The name of the property in the JSON object. Defaults to None.
-            required (`bool`, optional): Whether the property is required. Defaults to False.
-            default_factory (`Optional[Callable[[], Optional[float]]]`, optional): A function that returns a default value for the property. Defaults to None.
+            json_property_name (`Optional[str]`, optional): The name of the property
+            in the JSON object. Defaults to None.
+            required (`bool`, optional): Whether the property is required.
+            Defaults to False.
+            default_factory (`Optional[Callable[[], Optional[float]]]`, optional):
+            A function that returns a default value for the property. Defaults to None.
         """
 
         super().__init__(
