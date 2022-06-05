@@ -41,7 +41,7 @@ class ListProperty(Generic[T], TProperty[list[T]]):
         )
 
 
-class VirtualListProperty(Generic[T], TProperty[Optional[list[T]]]):
+class VirtualListProperty(Generic[T], TProperty[list[T]]):
     """VirtualListProperty is a property that stores a list value which can be
     loaded lazily."""
 

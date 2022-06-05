@@ -1,8 +1,11 @@
 # simple-json-db
 
-This is a simple json database. The package provides a simple ORM between python objects and json objects with a well type-hinted schema.
+This is a simple json database.
+The package provides a simple ORM between python objects and
+json objects with a well type-hinted schema.
 
-This package maps your python objects to json and then you can save, get, modify or delete them using async methods.
+This package maps your python objects to json and then you can save, get,
+modify or delete them using async methods.
 
 _This package is for tiny and simple projects. with a low amount of data._
 
@@ -26,17 +29,20 @@ This data base consist of 3 main elements:
 
     It's obvious that you should have a model for your data to save, update, or ...
     
-    Since this library works with json, your model can contain everything that JSON can.
+    Since this library works with json, your model can contain everything
+    that JSON can.
 
 2- **Collection**
 
-    You have a collection of data for every model, therefor, The relation between Model and Collection is one to one.
+    You have a collection of data for every model, therefor,
+    The relation between Model and Collection is one to one.
 
 3- **Engine**
 
     This is where all collections are operate.
 
-So, Every `Engine` has some `Collection`s where each collection contains a set of an unique `Model`.
+So, Every `Engine` has some `Collection`s where each collection
+contains a set of an unique `Model`.
 
 ### Let's create a model
 
@@ -53,7 +59,8 @@ class Person(TEntity):
         self.age = age
 ```
 
-Using `auto_collect()` method, the model will automatically collect properties form `__init__` method.
+Using `auto_collect()` method,
+the model will automatically collect properties form `__init__` method.
 
 ### Creating collection ?
 
@@ -145,6 +152,7 @@ async with collection.get_queryable() as persons:
 
 await collection.save_changes_async()
 ```
+
 Or even delete them ...
 
 ```py

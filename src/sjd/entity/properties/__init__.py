@@ -104,11 +104,11 @@ def entity(
     )
 
 
-def optional(property: TProperty[T]) -> TProperty[Optional[T]]:
+def optional(prop: TProperty[T]) -> TProperty[Optional[T]]:
     """Mark current attribute as an optional `T` property. ( ClassVar only )"""
-    if isinstance(property, OptionalProperty):
-        return property  # type: ignore
-    return property.optional()
+    if isinstance(prop, OptionalProperty):
+        return prop  # type: ignore
+    return prop.optional()
 
 
 def from_entity(
@@ -117,7 +117,9 @@ def from_entity(
     *,
     json_property_name: Optional[str] = None,
 ) -> VirtualComplexProperty[T]:
-    """Mark current attribute as a virtual entity that stored in another collection. ( ClassVar only )"""
+    """Mark current attribute as a virtual entity that stored in another collection.
+    ( ClassVar only )"""
+
     return VirtualComplexProperty(
         entity_type,
         refers_to_property,
@@ -131,7 +133,9 @@ def from_entities(
     *,
     json_property_name: Optional[str] = None,
 ) -> VirtualListProperty[T]:
-    """Mark current attribute as a virtual list of entities that stored in another collection. ( ClassVar only )"""
+    """Mark current attribute as a virtual list of entities that stored
+    in another collection. ( ClassVar only )"""
+
     return VirtualListProperty(
         entity_type,
         refers_to_property,
@@ -140,7 +144,9 @@ def from_entities(
 
 
 def reference():
-    """Mark current attribute as a reference to another entity's id. ( ClassVar only )"""
+    """Mark current attribute as a reference to another entity's id.
+    ( ClassVar only )"""
+
     return ReferenceProperty()
 
 

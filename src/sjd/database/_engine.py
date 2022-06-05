@@ -5,7 +5,11 @@ from typing import Any, Optional, TypeVar, final
 
 from ..entity import TEntity
 from ..serialization._shared import T
-from ._collection import AbstractCollection, Collection
+from ._collection import (
+    AbstractCollection,
+    Collection,
+    UuidMasterEntity,
+)
 from ._descriptors import _Collection, _TypedCollection, _TCol  # type: ignore
 from ._configuration import EngineConfiguration, CollectionConfiguration
 
@@ -49,7 +53,10 @@ class Engine:
     Base of everything that you gonna use,
     Should be used as base class of your engine"""
 
-    def __init__(self, base_path: Path | str):
+    __db_path__: str | Path
+    """The base path of the engine."""
+
+    def __init__(self, base_path: Optional[Path | str] = None):
         """Initializes the engine.
 
         Base of everything that you gonna use, Should be used as
@@ -59,10 +66,19 @@ class Engine:
             base_path (`Path` | `str`): The base path of the engine.
         """
 
+        path_from_type = getattr(self, "__db_path__", None)
+        if path_from_type:
+            base_path = path_from_type
+
         if isinstance(base_path, str):
-            self._base_path = Path(base_path)
-        else:
+            if base_path:
+                self._base_path = Path(base_path)
+            else:
+                raise ValueError("Parameter base_path can't be None or empty")
+        elif isinstance(base_path, Path):
             self._base_path = base_path
+        else:
+            raise ValueError("Parameter base_path can't be None or empty")
 
         self.__initialized = True
         self.__initialize_path(self._base_path)
@@ -202,7 +218,7 @@ class Engine:
 
     @final
     @staticmethod
-    def set(entity_type: type[T]) -> _Collection[T]:
+    def set(entity_type: type[T]) -> _Collection[UuidMasterEntity, str, T]:
         """Sets a collection (staticmethod).
 
         Args:
@@ -212,13 +228,13 @@ class Engine:
             `__Collection__[T]`: The descriptor of the collection.
             can only be used as an engine's `ClassVar`.
         """
-        return _Collection[T](entity_type)
+        return _Collection(entity_type)
 
     @final
     @staticmethod
     def typed_set(
         entity_type: type[T], collection_type: type[_TCol]
-    ) -> _TypedCollection[T, _TCol]:
+    ) -> _TypedCollection[Any, Any, T, _TCol]:
         """Sets a typed collection (staticmethod).
 
         Args:
@@ -229,7 +245,7 @@ class Engine:
             `__Typed_Collection__[T, _TCol]`: The descriptor of the collection.
             can only be used as an engine's `ClassVar`.
         """
-        return _TypedCollection[T, _TCol](entity_type, collection_type)
+        return _TypedCollection(entity_type, collection_type)
 
     def get_collection_config(
         self, _entity_type: type[_TCol]
@@ -240,3 +256,19 @@ class Engine:
             _entity_type (`type[_TCol]`): The entity type of the collection.
         """
         return self.__configs.get_collection_config(_entity_type)
+
+    async def save_changes_async(self, *ignore_collections: type[Any]) -> int:
+        """Save changes for all registered collections
+
+
+        Args:
+            ignore_collections (`type[Any]`): The entity type of the collections
+            to ignore save on.
+        """
+
+        all_changes = 0
+        for entity_type, collection in self.__collections.items():
+            if entity_type in ignore_collections:
+                continue
+            all_changes += await collection.save_changes_async()
+        return all_changes
