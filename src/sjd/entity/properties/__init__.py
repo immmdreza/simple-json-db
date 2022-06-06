@@ -7,6 +7,7 @@ from ._int_property import IntProperty
 from ._str_property import StrProperty, ReferenceProperty
 from ._float_property import FloatProperty
 from ._bool_property import BoolProperty
+from ._datetime_property import DateTimeProperty
 from ._property_grabber import auto_collect
 from .._property import TProperty
 from ...serialization._shared import T
@@ -150,6 +151,21 @@ def reference():
     return ReferenceProperty()
 
 
+def from_datetime(
+    *,
+    init: bool = True,
+    json_property_name: Optional[str] = None,
+    required: bool = False,
+):
+    """Represents a placeholder for datetime property."""
+    return DateTimeProperty(
+        init=init,
+        json_property_name=json_property_name,
+        required=required,
+        default_factory=lambda: None,
+    )
+
+
 __all__ = [
     "auto_collect",
     "integer",
@@ -162,4 +178,5 @@ __all__ = [
     "from_entity",
     "from_entities",
     "reference",
+    "from_datetime",
 ]

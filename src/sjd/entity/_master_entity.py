@@ -1,10 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import Any, Generic, Optional, TypeVar
+from typing import Generic, Optional, TypeVar
 import uuid
 
-from ..serialization import serialize, deserialize
 from ..serialization._shared import T
-from ..serialization._serializable import Serializable
 from ._property import TProperty
 
 
@@ -12,7 +10,7 @@ _TKey = TypeVar("_TKey", str, int)
 _TMasterEntity = TypeVar("_TMasterEntity", bound="MasterEntity")
 
 
-class MasterEntity(Generic[_TKey, T], Serializable, ABC):
+class MasterEntity(Generic[_TKey, T], ABC):
     """The master of any entity that keeps an entity along with an id."""
 
     slave_entity_type: type[T]
@@ -27,19 +25,10 @@ class MasterEntity(Generic[_TKey, T], Serializable, ABC):
         self.__id = self.__generate_key__()
         self.slave = slave_entity  # type: ignore
 
-    def __serialize__(self) -> Any:
-        return serialize(self)
-
     @property
     def id(self):  # pylint: disable=invalid-name
         """The unique key of the entity."""
         return self.__id
-
-    @classmethod
-    def __deserialize__(
-        cls: type[_TMasterEntity], data: Any
-    ) -> Optional[_TMasterEntity]:
-        return deserialize(cls, data)
 
     @classmethod
     def set_id_property(cls: type[_TMasterEntity], id_property: TProperty[_TKey]):

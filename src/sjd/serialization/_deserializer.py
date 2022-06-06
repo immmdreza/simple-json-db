@@ -1,5 +1,7 @@
 from typing import Any, Optional
+
 from ._shared import get_properties, T
+from ._serializable import Serializable
 
 
 def deserialize(entity: type[T], data: Any) -> Optional[T]:
@@ -18,6 +20,9 @@ def deserialize(entity: type[T], data: Any) -> Optional[T]:
 
     if not data:
         return None
+
+    if issubclass(entity, Serializable):
+        return entity.deserialize(data)
 
     inputs_map: dict[str, Any] = {}
     dont_inits: list[str] = []
@@ -46,7 +51,10 @@ def deserialize(entity: type[T], data: Any) -> Optional[T]:
                 prop.type_of_entity, data[j_prop_name]
             )
         else:
-            inputs_map[prop.actual_name] = data[j_prop_name]
+            if isinstance(prop, Serializable):
+                inputs_map[prop.actual_name] = prop.deserialize(data[j_prop_name])
+            else:
+                inputs_map[prop.actual_name] = data[j_prop_name]
         found_props += 1
 
     if found_props == 0:

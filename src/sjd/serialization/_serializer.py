@@ -1,6 +1,7 @@
 from typing import Any
 
 from ._shared import get_properties
+from ._serializable import Serializable
 
 
 def serialize(entity: Any) -> Any:
@@ -18,6 +19,9 @@ def serialize(entity: Any) -> Any:
 
     if entity is None:
         return None
+
+    if isinstance(entity, Serializable):
+        return entity.serialize()
 
     result: dict[str, Any] = {}
     found_props = 0
@@ -40,7 +44,10 @@ def serialize(entity: Any) -> Any:
         elif prop.is_complex:
             result[j_prop_name] = serialize(getattr(entity, prop.actual_name))
         else:
-            result[j_prop_name] = getattr(entity, prop.actual_name)
+            if isinstance(prop, Serializable):
+                result[j_prop_name] = prop.serialize()
+            else:
+                result[j_prop_name] = getattr(entity, prop.actual_name)
         found_props += 1
 
     if found_props == 0:

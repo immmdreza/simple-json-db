@@ -1,9 +1,11 @@
 import inspect
+import datetime
 from types import NoneType
-from typing import Any, Callable, NoReturn, Optional
+from typing import Any, Callable, Optional
 
 from .._entity import TEntity, EmbeddedEntity
 from .._property import TProperty
+from ..properties._datetime_property import DateTimeProperty
 from ...serialization._shared import T
 
 
@@ -14,21 +16,20 @@ VALID_TYPES = (  # type: ignore
     bool,
     list,
     TEntity,
+    datetime.datetime,
     EmbeddedEntity,
 )
 
 
 def __resolve_type(
     name: str, annotation: Any, optional: bool = False
-) -> tuple[type[Any], bool, bool, bool]:
-    def __raise() -> NoReturn:
-        raise ValueError(f"Parameter {name} has invalid type: {annotation}")
+) -> Optional[tuple[type[Any], bool, bool, bool]]:
 
     try:
         if issubclass(annotation, VALID_TYPES):
             is_complex = issubclass(annotation, (TEntity, EmbeddedEntity))
             return (annotation, optional, False, is_complex)  # type: ignore
-        __raise()
+        return None
     except TypeError:
         if hasattr(annotation, "__args__"):
             __args__: tuple[type[Any], ...] = annotation.__args__  # type: ignore
@@ -37,20 +38,20 @@ def __resolve_type(
                     if annotation.__origin__ is list:  # type: ignore
                         return (__args__[0], optional, True, False)
                     else:
-                        __raise()
+                        return None
                 else:
-                    __raise()
+                    return None
             elif len(__args__) == 2:
                 try:
                     _ = next(x for x in __args__ if x is NoneType)
                     other_type = next(x for x in __args__ if x is not NoneType)
                     return __resolve_type(name, other_type, optional=True)
                 except StopIteration:
-                    __raise()
+                    return None
             else:
-                __raise()
+                return None
         else:
-            __raise()
+            return None
 
 
 def __grab_props(__init__: Callable[..., Any]):
@@ -63,7 +64,10 @@ def __grab_props(__init__: Callable[..., Any]):
         if key == "self":
             continue
         annotation = value.annotation
-        yield key, *__resolve_type(key, annotation)
+        resolved_type = __resolve_type(key, annotation)
+        if resolved_type is None:
+            continue
+        yield key, *resolved_type
 
 
 def auto_collect(
@@ -103,10 +107,16 @@ def auto_collect(
                     if hasattr(Cls, info[0]):
                         continue
 
-                    setattr(
-                        Cls,
-                        info[0],
-                        TProperty(
+                    if info[1] == datetime.datetime:
+                        prop = DateTimeProperty(
+                            init=True,
+                            required=not info[2],
+                            json_property_name=info[0],
+                            default_factory=lambda: None,
+                            actual_name=info[0],
+                        )
+                    else:
+                        prop = TProperty(
                             info[1],
                             init=True,
                             required=not info[2],
@@ -115,8 +125,9 @@ def auto_collect(
                             is_complex=info[4],
                             default_factory=info[0],  # type: ignore
                             actual_name=info[0],
-                        ),
-                    )
+                        )
+
+                    setattr(Cls, info[0], prop)
                     found_any = True
                 if found_any:
                     setattr(Cls, "__json_init__", True)

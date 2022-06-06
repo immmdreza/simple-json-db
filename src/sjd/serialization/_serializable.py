@@ -1,8 +1,11 @@
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Generic, Optional, TypeVar, final
 
 
-class Serializable(ABC):
+_T = TypeVar("_T")
+
+
+class Serializable(Generic[_T], ABC):
     """
     Abstract template class for all serializable entities.
     """
@@ -12,16 +15,21 @@ class Serializable(ABC):
         """
         Serialize the entity.
         """
-        ...  # pylint: disable=unnecessary-ellipsis
 
     @classmethod
     @abstractmethod
-    def __deserialize__(cls, data: Any) -> Any:
+    def __deserialize__(cls, data: Any) -> Optional[_T]:
         """
         Deserialize the entity.
         """
-        ...  # pylint: disable=unnecessary-ellipsis
 
+    @final
     def serialize(self):
         """Serialize the entity."""
         return self.__serialize__()
+
+    @final
+    @classmethod
+    def deserialize(cls, data: Any) -> Optional[_T]:
+        """Deserialize the data into entity of this type."""
+        return cls.__deserialize__(data)

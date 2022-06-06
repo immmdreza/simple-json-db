@@ -383,7 +383,7 @@ class AbstractCollection(Generic[_TMasterEntity, _TKey, T], ABC):
 
                 # Deal with add.
                 if updated_data["created"]:
-                    async with aiofiles.open(file_path, "w") as file:
+                    async with aiofiles.open(file_path, "a") as file:
                         for entity in updated_data["created"].values():
                             await self._manage_referral_properties(entity)
                             data = json.dumps(serialize(entity))
