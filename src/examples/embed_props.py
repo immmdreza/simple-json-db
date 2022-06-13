@@ -1,10 +1,12 @@
+# pylint: skip-file
+
 import asyncio
 from pathlib import Path
 
-from sjd import TEntity, EmbedEntity, Engine, properties as props
+from sjd import TEntity, EmbeddedEntity, Engine, properties as props
 
 
-class Grade(EmbedEntity):
+class Grade(EmbeddedEntity):
     __json_init__ = True
 
     course_id = props.integer(required=True)
@@ -50,10 +52,12 @@ async def main():
 
     engine = AppEngine()
 
-    await engine.students.add_many(
+    engine.students.add_range(
         Student(1, "John", "Doe", [Grade(1, "Math", 90), Grade(2, "English", 80)]),
         Student(2, "Jane", "Doe", [Grade(1, "Math", 90), Grade(2, "English", 80)]),
     )
+
+    await engine.students.save_changes_async()
 
 
 if __name__ == "__main__":

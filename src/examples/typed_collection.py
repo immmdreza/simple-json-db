@@ -1,4 +1,8 @@
+# pylint: skip-file
+
+
 import asyncio
+
 from sjd import Engine, Collection, TEntity, properties as props
 
 
@@ -15,9 +19,10 @@ class EmployeeCollection(Collection[Employee]):
         super().__init__(engine, Employee, "employeesCollection")
 
     async def add_employee(self, first_name: str, last_name: str) -> None:
-        added_count = await self.count()
+        added_count = await self.count_async()
         employee_id = 100000 + added_count
-        await self.add(Employee(employee_id, first_name, last_name))
+        self.add(Employee(employee_id, first_name, last_name))
+        await self.save_changes_async()
 
 
 class AppEngine(Engine):

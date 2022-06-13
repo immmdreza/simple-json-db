@@ -21,10 +21,14 @@ class ComplexProperty(Generic[T], TProperty[T]):
         """Initialize a new ComplexProperty.
 
         Args:
-            _type_of_entity (`type[T]`): The type of the entity that is stored in the property.
-            json_property_name (`Optional[str]`, optional): The name of the property in the JSON object. Defaults to None.
-            required (`bool`, optional): Whether the property is required. Defaults to False.
-            default_factory (`Optional[Callable[[], Optional[T]]]`, optional): A function that returns a default value for the property. Defaults to None.
+            _type_of_entity (`type[T]`): The type of the entity that is stored
+            in the property.
+            json_property_name (`Optional[str]`, optional): The name of the property
+            in the JSON object. Defaults to None.
+            required (`bool`, optional): Whether the property is required.
+            Defaults to False.
+            default_factory (`Optional[Callable[[], Optional[T]]]`, optional):
+            A function that returns a default value for the property. Defaults to None.
         """
 
         super().__init__(
@@ -39,7 +43,8 @@ class ComplexProperty(Generic[T], TProperty[T]):
 
 
 class OptionalComplexProperty(Generic[T], OptionalProperty[T]):
-    """OptionalComplexProperty is a property that stores a complex value which is not required."""
+    """OptionalComplexProperty is a property that stores a complex value which
+    is not required."""
 
     def __init__(
         self,
@@ -52,9 +57,12 @@ class OptionalComplexProperty(Generic[T], OptionalProperty[T]):
         """Initialize a new ComplexProperty.
 
         Args:
-            _type_of_entity (`type[T]`): The type of the entity that is stored in the property.
-            init (`bool`, optional): Whether the property should passed to __init__. Defaults to True.
-            json_property_name (`Optional[str]`, optional): The name of the property in the JSON object. Defaults to None.
+            _type_of_entity (`type[T]`): The type of the entity that is stored
+            in the property.
+            init (`bool`, optional): Whether the property should passed to __init__.
+            Defaults to True.
+            json_property_name (`Optional[str]`, optional): The name of the property
+            in the JSON object. Defaults to None.
         """
 
         super().__init__(
@@ -68,7 +76,8 @@ class OptionalComplexProperty(Generic[T], OptionalProperty[T]):
 
 
 class VirtualComplexProperty(Generic[T], OptionalComplexProperty[T]):
-    """VirtualComplexProperty is a property that stores a complex value which can be loaded lazily."""
+    """VirtualComplexProperty is a property that stores a complex value which
+    can be loaded lazily."""
 
     __virtual__ = True
     """Indicates that this class is a virtual property ( Lazy loader )."""
@@ -89,4 +98,5 @@ class VirtualComplexProperty(Generic[T], OptionalComplexProperty[T]):
 
     @property
     def refers_to(self):
+        """The name of the property that this property refers to."""
         return self._refers_to

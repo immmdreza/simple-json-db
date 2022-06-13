@@ -1,7 +1,10 @@
+# pylint: skip-file
+# flake8: noqa
+
 from typing import Optional
 
-from src.sjd import TEntity, EmbedEntity
-from src.sjd.entity.properties._property_grabber import collect_props_from_init
+from src.sjd import TEntity, EmbeddedEntity
+from src.sjd.entity.properties._property_grabber import auto_collect
 from src.sjd.serialization import serialize, deserialize
 
 
@@ -9,11 +12,11 @@ def test_1():
     class Grade(TEntity):
         pass
 
-    class Info(EmbedEntity):
+    class Info(EmbeddedEntity):
         pass
 
     # Create a model to store.
-    @collect_props_from_init
+    @auto_collect()
     class Student(TEntity):  # type: ignore
         def __init__(
             self,
@@ -35,7 +38,7 @@ def test_1():
 
 
 def test_2():
-    @collect_props_from_init
+    @auto_collect()
     class Student(TEntity):
         def __init__(self, first_name: str, last_name: str | None = None) -> None:
             super().__init__()

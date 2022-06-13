@@ -1,5 +1,7 @@
 from typing import Any, Optional
+
 from ._shared import get_properties, T
+from ._serializable import Serializable
 
 
 def deserialize(entity: type[T], data: Any) -> Optional[T]:
@@ -19,34 +21,40 @@ def deserialize(entity: type[T], data: Any) -> Optional[T]:
     if not data:
         return None
 
+    if issubclass(entity, Serializable):
+        return entity.deserialize(data)
+
     inputs_map: dict[str, Any] = {}
     dont_inits: list[str] = []
     found_props = 0
-    for property in get_properties(entity):
-        j_prop_name = property.json_property_name or property.actual_name
-        if not property.init:
-            dont_inits.append(property.actual_name)
+    for prop in get_properties(entity):
+        j_prop_name = prop.json_property_name or prop.actual_name
+        if not prop.init:
+            dont_inits.append(prop.actual_name)
 
         if j_prop_name not in data:
-            if property.required:
+            if prop.required:
                 raise ValueError(
                     f"Property '{j_prop_name}' is required but not found in the data."
                 )
             else:
-                if property.default_factory is not None:
-                    inputs_map[property.actual_name] = property.default_factory()
+                if prop.default_factory is not None:
+                    inputs_map[prop.actual_name] = prop.default_factory()
                 continue
 
-        if property.is_list:
-            inputs_map[property.actual_name] = [
-                deserialize(property.type_of_entity, x) for x in data[j_prop_name]
+        if prop.is_list:
+            inputs_map[prop.actual_name] = [
+                deserialize(prop.type_of_entity, x) for x in data[j_prop_name]
             ]
-        elif property.is_complex:
-            inputs_map[property.actual_name] = deserialize(
-                property.type_of_entity, data[j_prop_name]
+        elif prop.is_complex:
+            inputs_map[prop.actual_name] = deserialize(
+                prop.type_of_entity, data[j_prop_name]
             )
         else:
-            inputs_map[property.actual_name] = data[j_prop_name]
+            if isinstance(prop, Serializable):
+                inputs_map[prop.actual_name] = prop.deserialize(data[j_prop_name])
+            else:
+                inputs_map[prop.actual_name] = data[j_prop_name]
         found_props += 1
 
     if found_props == 0:

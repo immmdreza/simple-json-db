@@ -20,10 +20,14 @@ class ListProperty(Generic[T], TProperty[list[T]]):
         """Initialize a new ListProperty.
 
         Args:
-            _type_of_entity (`type[T]`): The type of the entity that is stored in each element of the property.
-            json_property_name (`Optional[str]`, optional): The name of the property in the JSON object. Defaults to None.
-            required (`bool`, optional): Whether the property is required. Defaults to False.
-            default_factory (`Optional[Callable[[], Optional[list[T]]]]`, optional): A function that returns a default value for the property. Defaults to None.
+            _type_of_entity (`type[T]`): The type of the entity that is stored in
+            each element of the property.
+            json_property_name (`Optional[str]`, optional): The name of the property
+            in the JSON object. Defaults to None.
+            required (`bool`, optional): Whether the property is required.
+            Defaults to False.
+            default_factory (`Optional[Callable[[], Optional[list[T]]]]`, optional):
+            A function that returns a default value for the property. Defaults to None.
         """
 
         super().__init__(
@@ -37,8 +41,9 @@ class ListProperty(Generic[T], TProperty[list[T]]):
         )
 
 
-class VirtualListProperty(Generic[T], TProperty[Optional[list[T]]]):
-    """VirtualListProperty is a property that stores a list value which can be loaded lazily."""
+class VirtualListProperty(Generic[T], TProperty[list[T]]):
+    """VirtualListProperty is a property that stores a list value which can be
+    loaded lazily."""
 
     __virtual__ = True
     """Indicates that this class is a virtual property ( Lazy loader )."""
@@ -65,4 +70,5 @@ class VirtualListProperty(Generic[T], TProperty[Optional[list[T]]]):
 
     @property
     def refers_to(self):
+        """The name of the property that this property refers to."""
         return self._refers_to

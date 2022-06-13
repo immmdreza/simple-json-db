@@ -1,3 +1,5 @@
+# pylint: skip-file
+
 import asyncio
 from typing import Optional
 
@@ -21,7 +23,8 @@ class StandbyInfo(_Days):
     pass
 
 
-@props.auto_collect()  # This won't override attributes you've already defined ( rest_info & standby_info here ).
+@props.auto_collect()  # This won't override attributes you've already defined
+# ( rest_info & standby_info here ).
 class Employee(TEntity):
 
     rest_info = props.from_entity(RestInfo, "employee_id")
@@ -69,12 +72,15 @@ async def main():
     engine = AppEngine()
     employees_col = engine.employees
 
-    await employees_col.add(Employee(1, "John", "Doe", RestInfo(5), StandbyInfo(5)))
+    employees_col.add(Employee(1, "John", "Doe", RestInfo(5), StandbyInfo(5)))
+    await employees_col.save_changes_async()
 
     async for item in employees_col:
-        await employees_col.delete(item)
+        employees_col.delete(item)
     # Due to engine configs, this'll delete the rest_info entity too.
-    # But the standby_info entity will not be deleted entirely only StandbyInfo.employee_id will be None.
+    # But the standby_info entity will not be deleted entirely only
+    # StandbyInfo.employee_id will be None.
+    await employees_col.save_changes_async()
 
 
 if __name__ == "__main__":

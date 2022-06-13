@@ -1,3 +1,5 @@
+# pylint: skip-file
+
 from sjd import properties as props
 from sjd.serialization import serialize, deserialize
 
@@ -38,4 +40,5 @@ print(serialize([my_sub, my_sub_2]))
 deserialized_list = deserialize(MySubModel, [{"sub_id": 123456}, {"sub_id": 9876431}])
 if deserialized_list:
     print(deserialized_list)
-    # [<__main__.MySubModel object at 0x00000253B1029F60>, <__main__.MySubModel object at 0x00000253B1029F90>]
+    # [<__main__.MySubModel object at 0x00000253B1029F60>,
+    # <__main__.MySubModel object at 0x00000253B1029F90>]

@@ -5,19 +5,29 @@ from typing import Any, Optional, TypeVar, final
 
 from ..entity import TEntity
 from ..serialization._shared import T
-from ._collection import AbstractCollection, Collection
-from ._descriptors import __Collection__, __Typed_Collection__, _TCol  # type: ignore
+from ._collection import (
+    AbstractCollection,
+    Collection,
+    UuidMasterEntity,
+)
+from ._descriptors import _Collection, _TypedCollection, _TCol  # type: ignore
 from ._configuration import EngineConfiguration, CollectionConfiguration
 
 
 class EngineNotInitialized(Exception):
+    """This exception is raised when the engine is not initialized."""
+
     def __init__(self) -> None:
         super().__init__(
-            "Engine is not initialized! Did you missed __init__ or super().__init__ inside it?"
+            "Engine is not initialized! Did you missed __init__ or super().__init__"
+            " inside it?"
         )
 
 
 class CollectionEntityTypeDuplicated(Exception):
+    """This exception is raised when the entity type is
+    duplicated in the collection."""
+
     def __init__(self, collection_name: str, entity_type: type[Any]) -> None:
         super().__init__(
             f"Collection {collection_name} already has entity type {entity_type}"
@@ -25,9 +35,12 @@ class CollectionEntityTypeDuplicated(Exception):
 
 
 class CollectionNotRegistered(Exception):
+    """This exception is raised when the collection is not registered."""
+
     def __init__(self, collection_name: str) -> None:
         super().__init__(
-            f"Collection {collection_name} is not registered. Did you done something wired?"
+            f"Collection {collection_name} is not registered."
+            " Did you done something wired?"
         )
 
 
@@ -37,25 +50,39 @@ _TEngine = TypeVar("_TEngine", bound="Engine")
 class Engine:
     """Initializes the engine.
 
-    Base of everything that you gonna use, Should be used as base class of your engine"""
+    Base of everything that you gonna use,
+    Should be used as base class of your engine"""
 
-    def __init__(self, base_path: Path | str):
+    __db_path__: str | Path
+    """The base path of the engine."""
+
+    def __init__(self, base_path: Optional[Path | str] = None):
         """Initializes the engine.
 
-        Base of everything that you gonna use, Should be used as base class of your engine
+        Base of everything that you gonna use, Should be used as
+        base class of your engine
 
         Args:
             base_path (`Path` | `str`): The base path of the engine.
         """
 
+        path_from_type = getattr(self, "__db_path__", None)
+        if path_from_type:
+            base_path = path_from_type
+
         if isinstance(base_path, str):
-            self._base_path = Path(base_path)
-        else:
+            if base_path:
+                self._base_path = Path(base_path)
+            else:
+                raise ValueError("Parameter base_path can't be None or empty")
+        elif isinstance(base_path, Path):
             self._base_path = base_path
+        else:
+            raise ValueError("Parameter base_path can't be None or empty")
 
         self.__initialized = True
         self.__initialize_path(self._base_path)
-        self.__collections: dict[type[Any], AbstractCollection[Any]] = {}
+        self.__collections: dict[type[Any], AbstractCollection[Any, Any, Any]] = {}
         self.__set_collections()
 
         self.__configs = EngineConfiguration(type(self))
@@ -64,7 +91,7 @@ class Engine:
         """Manually registers a collection."""
         self.register_collection(entity_type, name)
 
-    def __getitem__(self, entity_type: type[T]) -> AbstractCollection[T]:
+    def __getitem__(self, entity_type: type[T]) -> AbstractCollection[Any, Any, T]:
         """Gets a collection by entity type.
 
         Args:
@@ -74,10 +101,12 @@ class Engine:
 
     def __set_collections(self):
         for _, col in inspect.getmembers(type(self)):
-            if isinstance(col, __Collection__):
-                self.register_collection(col.entity_type, col.collection_name)  # type: ignore
-            elif isinstance(col, __Typed_Collection__):
-                self.register_typed_collection(col.collection_type)
+            if isinstance(col, _TypedCollection):
+                self.register_typed_collection(col.collection_type)  # type: ignore
+            elif isinstance(col, _Collection):
+                self.register_collection(
+                    col.entity_type, col.collection_name
+                )  # type: ignore
 
     def __initialize_path(self, path: Path):
         if not path.exists():
@@ -89,7 +118,7 @@ class Engine:
         return self.__configs  # type: ignore
 
     @final
-    def get_base_path(self, collection: AbstractCollection[Any]) -> Path:
+    def get_base_path(self, collection: AbstractCollection[Any, Any, Any]) -> Path:
         """Returns the base path of the engine.
 
         Args:
@@ -105,11 +134,10 @@ class Engine:
         if collection.entity_type not in self.__collections:
             raise CollectionNotRegistered(collection.name)
 
-        """Returns the base path of the engine."""
         return self._base_path
 
     @final
-    def get_collection(self, entity_type: type[T]) -> AbstractCollection[T]:
+    def get_collection(self, entity_type: type[T]) -> AbstractCollection[Any, Any, T]:
         """Returns the collection of the entity type.
 
         Args:
@@ -119,7 +147,8 @@ class Engine:
             `EngineNotInitialized`: If the engine is not initialized.
 
         Returns:
-            `Optional[Collection[T]]`: The collection of the entity type. `None` if not found.
+            `Optional[Collection[T]]`: The collection of the entity type.
+            `None` if not found.
         """
         if not self.__initialized:
             raise EngineNotInitialized()
@@ -128,20 +157,21 @@ class Engine:
         return self.__collections[entity_type]
 
     @final
-    def purge(self) -> None:
+    async def purge(self) -> None:
         """Purges the engine."""
         for collection in self.__collections.values():
-            collection.purge()
+            await collection.purge_async()
         self._base_path.rmdir()
 
     def register_collection(
         self, entity_type: type[T], name: Optional[str] = None, /
-    ) -> AbstractCollection[T]:
+    ) -> AbstractCollection[Any, Any, T]:
         """Manually registers a collection.
 
         Args:
             entity_type (`type[T]`): The entity type of the collection.
-            name (`Optional[str]`, optional): The name of the collection. Defaults to `Type.__name__`.
+            name (`Optional[str]`, optional): The name of the collection.
+            Defaults to `Type.__name__`.
 
         Raises:
             `EngineNotInitialized`: If the engine is not initialized.
@@ -165,14 +195,20 @@ class Engine:
         return col  # type: ignore
 
     def register_typed_collection(
-        self, collection: type[AbstractCollection[T]]
-    ) -> AbstractCollection[T]:
+        self, collection: type[AbstractCollection[Any, Any, T]]
+    ) -> AbstractCollection[Any, Any, T]:
+        """Manually registers a typed collection.
+
+        Args:
+            collection (`type[Collection[T]]`): The collection type.
+        """
+
         if not self.__initialized:
             raise EngineNotInitialized()
 
         col = collection(self)
 
-        if col.entity_type is None or not issubclass(col.entity_type, TEntity):  # type: ignore
+        if col.entity_type is None or not issubclass(col.entity_type, TEntity):
             raise ValueError("entity_type must be a TEntity.")
 
         if col.entity_type in self.__collections:
@@ -182,22 +218,23 @@ class Engine:
 
     @final
     @staticmethod
-    def set(entity_type: type[T]) -> __Collection__[T]:
+    def set(entity_type: type[T]) -> _Collection[UuidMasterEntity, str, T]:
         """Sets a collection (staticmethod).
 
         Args:
             entity_type (`type[T]`): The entity type of the collection.
 
         Returns:
-            `__Collection__[T]`: The descriptor of the collection. can only be used as an engine's `ClassVar`.
+            `__Collection__[T]`: The descriptor of the collection.
+            can only be used as an engine's `ClassVar`.
         """
-        return __Collection__[T](entity_type)
+        return _Collection(entity_type)
 
     @final
     @staticmethod
     def typed_set(
         entity_type: type[T], collection_type: type[_TCol]
-    ) -> __Typed_Collection__[T, _TCol]:
+    ) -> _TypedCollection[Any, Any, T, _TCol]:
         """Sets a typed collection (staticmethod).
 
         Args:
@@ -205,16 +242,33 @@ class Engine:
             collection_type (`type[_TCol]`): The type of your collection.
 
         Returns:
-            `__Typed_Collection__[T, _TCol]`: The descriptor of the collection. can only be used as an engine's `ClassVar`.
+            `__Typed_Collection__[T, _TCol]`: The descriptor of the collection.
+            can only be used as an engine's `ClassVar`.
         """
-        return __Typed_Collection__[T, _TCol](entity_type, collection_type)
+        return _TypedCollection(entity_type, collection_type)
 
     def get_collection_config(
         self, _entity_type: type[_TCol]
-    ) -> Optional[CollectionConfiguration[AbstractCollection[_TCol]]]:
+    ) -> Optional[CollectionConfiguration[AbstractCollection[Any, Any, _TCol]]]:
         """Gets the collection configuration.
 
         Args:
             _entity_type (`type[_TCol]`): The entity type of the collection.
         """
         return self.__configs.get_collection_config(_entity_type)
+
+    async def save_changes_async(self, *ignore_collections: type[Any]) -> int:
+        """Save changes for all registered collections
+
+
+        Args:
+            ignore_collections (`type[Any]`): The entity type of the collections
+            to ignore save on.
+        """
+
+        all_changes = 0
+        for entity_type, collection in self.__collections.items():
+            if entity_type in ignore_collections:
+                continue
+            all_changes += await collection.save_changes_async()
+        return all_changes
