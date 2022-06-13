@@ -34,6 +34,8 @@ from ..entity._master_entity import (
 )
 from ..entity import TEntity, TProperty
 from ..query._queryable import AbstractAsyncQueryable
+from ..query._query_builder import QueryBuilder
+from ..query._query_factory import QueryFactory
 from ..serialization import deserialize, serialize
 from ..serialization._shared import T
 from ..entity.properties import (
@@ -183,6 +185,11 @@ class AbstractCollection(Generic[_TMasterEntity, _TKey, T], ABC):
     @abstractmethod
     def master_entity_factory(self) -> MasterEntityFactory[_TMasterEntity, _TKey, T]:
         """Get the factory for the master entity."""
+
+    @property
+    @abstractmethod
+    def qa(self) -> QueryFactory[T]:
+        """Get the factory for the query builder."""
 
     @final
     @property
@@ -474,6 +481,37 @@ class AbstractCollection(Generic[_TMasterEntity, _TKey, T], ABC):
         async with self._main_file_lock:
             shutil.copyfile(main_file.absolute(), dest_path.absolute())
 
+    async def find_all_async(
+        self, query: QueryBuilder[T, Any], /
+    ) -> AsyncGenerator[T, None]:
+        """Find all entities that match the query.
+
+        Args:
+            query (`QueryBuilder`): The query to match.
+        """
+
+        selector = "slave." + query.field_name
+
+        async with self.get_queryable() as tmp_file:
+            async for line in tmp_file.iter_lines():
+                for item in ijson.items(line, selector):
+                    if query.match(item):
+                        data = self.deserialize(line)
+                        if data is not None:
+                            yield self._get_as_tracked(data)
+                        break
+
+    async def find_one_async(self, query: QueryBuilder[T, Any], /) -> Optional[T]:
+        """Find one entity that match the query.
+
+        Args:
+            query (`QueryBuilder`): The query to match.
+        """
+
+        async for item in self.find_all_async(query):
+            return item
+        return None
+
     @overload
     def iterate_by_async(
         self, selector: str, __value: Any, /
@@ -525,7 +563,6 @@ class AbstractCollection(Generic[_TMasterEntity, _TKey, T], ABC):
                         data = self.deserialize(line)
                         if data is not None:
                             yield self._get_as_tracked(data)
-                        break
 
     @overload
     def get_first_async(
@@ -746,6 +783,7 @@ class Collection(Generic[T], AbstractCollection[UuidMasterEntity, str, T]):
 
         self._entity_type: type[T] = entity_type  # type: ignore
         self._master_entity_factory = UuidMasterEntityFactory(self._entity_type)
+        self._query_factory = QueryFactory(self._entity_type)
         super().__init__(engine)
 
     def _check_by_id(self, line_of: str | bytes, __id: str) -> bool:
@@ -755,8 +793,7 @@ class Collection(Generic[T], AbstractCollection[UuidMasterEntity, str, T]):
     def _get_line_id(self, line_of: str | bytes) -> str:
         if isinstance(line_of, str):
             return line_of[10:46]
-        else:
-            return line_of[10:46].decode()
+        return line_of[10:46].decode()
 
     @final
     @property
@@ -770,6 +807,12 @@ class Collection(Generic[T], AbstractCollection[UuidMasterEntity, str, T]):
         """Get the type of the entity."""
         return self._entity_type
 
+    @final
     @property
     def master_entity_factory(self) -> MasterEntityFactory[UuidMasterEntity, str, T]:
         return self._master_entity_factory
+
+    @final
+    @property
+    def qa(self) -> QueryFactory[T]:
+        return self._query_factory
