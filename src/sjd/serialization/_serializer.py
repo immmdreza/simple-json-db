@@ -28,7 +28,9 @@ def serialize(entity: Any) -> Any:
     for prop in get_properties(entity.__class__):
         j_prop_name = prop.json_property_name or prop.actual_name
 
-        if prop.actual_name not in entity.__dict__:
+        if not hasattr(
+            entity, prop.actual_name
+        ):  # prop.actual_name not in entity.__dict__:
             if prop.required:
                 raise ValueError(
                     f"Property '{j_prop_name}' is required but not found in the entity."

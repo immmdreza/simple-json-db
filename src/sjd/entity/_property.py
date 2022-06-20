@@ -1,5 +1,5 @@
 from abc import ABC
-from typing import Any, Callable, Generic, Optional, TypeVar, overload, cast
+from typing import Any, Callable, Generic, Optional, TypeVar, cast
 
 from ..serialization._serializable import Serializable
 
@@ -50,25 +50,14 @@ class TProperty(Generic[T], ABC):
         self._is_list: bool = is_list
         self._is_complex: bool = is_complex
         self._default_factory = default_factory
-        self._access_trail: tuple[str, ...]
         self._actual_name = actual_name
 
     def __set_name__(self, owner: type[object], name: str) -> None:
         self._actual_name = name
 
-    @overload
-    def __get__(self, obj: None, objtype: None) -> "TProperty[T]":
-        ...
-
-    @overload
-    def __get__(self, obj: object, objtype: type[object]) -> T:
-        ...
-
-    def __get__(
-        self, obj: object | None, objtype: type[object] | None = None
-    ) -> "TProperty[T]" | T:
+    def __get__(self, obj: Any, objtype: Any = None) -> T:
         if obj is None:
-            return self
+            return self  # type: ignore
 
         if self._actual_name is None:
             raise AttributeError(
