@@ -193,7 +193,6 @@ class SerializableProperty(Generic[T], TProperty[T], Serializable[T]):
             A function that returns a default value for the property. Defaults to None.
         """
 
-        self._value: Optional[T] = None
         super().__init__(
             _type_of_entity,
             init=init,
@@ -214,10 +213,3 @@ class SerializableProperty(Generic[T], TProperty[T], Serializable[T]):
             )
 
         obj.__dict__[self._actual_name] = value
-        self._value = value
-
-    @property
-    def value(self):
-        """Get actual value of the property."""
-
-        return self._value

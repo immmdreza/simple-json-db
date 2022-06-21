@@ -284,47 +284,6 @@ class AbstractCollection(Generic[_TMasterEntity, _TKey, T], ABC):
                             f"No ReferenceProperty found for {prop.refers_to}."
                         )
 
-    @final
-    async def _update_async(
-        self,
-        query: Callable[[T], bool],
-        update: Optional[Callable[[T], None]] = None,
-        one: bool = True,
-    ) -> None:
-
-        if query is None:
-            raise ValueError("query must not be None")
-
-        async with self._main_file_lock:
-            file_path = self._collection_path_builder()
-            tmp_path = self._collection_tmp_path_builder()
-            modified = False
-            async with aiofiles.open(file_path, "r") as file:
-                async with aiofiles.open(tmp_path, "w") as tmp_f:
-                    async for line in file:
-
-                        if one and modified:
-                            await tmp_f.write(line)
-                            continue
-
-                        current_data = deserialize(self.entity_type, json.loads(line))
-                        if current_data is not None and query(current_data):
-                            if update is not None:
-                                update(current_data)
-                                data = json.dumps(serialize(current_data))
-                                await tmp_f.write(data + "\n")
-                            else:
-                                await tmp_f.write("")
-                            modified = True
-                        else:
-                            await tmp_f.write(line)
-
-            if modified:
-                os.remove(file_path.absolute())
-                os.rename(tmp_path.absolute(), file_path.absolute())
-            else:
-                os.remove(tmp_path.absolute())
-
     async def _care_about_virtual_props(self, master: MasterEntity[_TKey, T]):
         col_config = self.configuration
         if col_config is None:
@@ -591,52 +550,6 @@ class AbstractCollection(Generic[_TMasterEntity, _TKey, T], ABC):
         async with self._main_file_lock:
             if self._collection_exists():
                 os.remove(self._collection_path_builder().absolute())
-
-    async def find_and_update_one_async(
-        self, query: Callable[[T], bool], update: Callable[[T], None]
-    ) -> None:
-        """Update the first entity that matches the query.
-
-        Args:
-            query (`Query[T]`): The query to match.
-            entity (`T`): The entity to update.
-        """
-
-        await self._ensure_collection_exists()
-        await self._update_async(query, update, one=True)
-
-    async def find_and_update_many_async(
-        self, query: Callable[[T], bool], update: Callable[[T], None]
-    ) -> None:
-        """Update all entities that match the query.
-
-        Args:
-            query (`Query[T]`): The query to match.
-            entity (`T`): The entity to update.
-        """
-
-        await self._ensure_collection_exists()
-        await self._update_async(query, update, one=False)
-
-    async def find_and_delete_one_async(self, query: Callable[[T], bool]) -> None:
-        """Delete the first entity that matches the query.
-
-        Args:
-            query (`Query[T]`): The query to match.
-        """
-
-        await self._ensure_collection_exists()
-        await self._update_async(query, one=True)
-
-    async def find_and_delete_many_async(self, query: Callable[[T], bool]) -> None:
-        """Delete all entities that matches the query.
-
-        Args:
-            query (`Query[T]`): The query to match.
-        """
-
-        await self._ensure_collection_exists()
-        await self._update_async(query, one=False)
 
     def delete(self, entity: T) -> _EntityTracker[_TKey, T]:
         """Delete an entity.

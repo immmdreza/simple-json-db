@@ -37,11 +37,9 @@ class DateTimeProperty(SerializableProperty[datetime.datetime]):
             actual_name=actual_name,
         )
 
-    def __serialize__(self):
-        if self._value is None:
-            return None
-
-        return self._value.isoformat()
+    @classmethod
+    def __serialize_from__(cls, value: datetime.datetime) -> Any:
+        return value.isoformat()
 
     @classmethod
     def __deserialize__(cls, data: Any) -> Optional[datetime.datetime]:

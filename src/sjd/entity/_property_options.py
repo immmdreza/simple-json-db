@@ -16,3 +16,11 @@ class PropertyOptions(Generic[_T]):
     is_complex: bool = False
     default_factory: Optional[Callable[[], Optional[_T]]] = None
     actual_name: Optional[str] = None
+
+
+@dataclass(slots=True, frozen=True)
+class PropertyBinder(Generic[_T]):
+    """A property that it's value comes from another (possibly private) attribute."""
+
+    attribute_name: str
+    attribute_type: Optional[type[_T]] = None

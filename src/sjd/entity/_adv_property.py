@@ -1,6 +1,6 @@
-from typing import Any, Callable, Generic, Optional
+from typing import Any, Callable, Generic, Optional, overload
 
-from ._property_options import PropertyOptions
+from ._property_options import PropertyOptions, PropertyBinder
 from ._property import TProperty, T
 
 
@@ -16,6 +16,7 @@ class AdvProperty(Generic[T], property, TProperty[T]):
         fset: Callable[[Any, T], None] | None = None,
         fdel: Callable[[Any], None] | None = None,
         doc: str | None = None,
+        binder: Optional[PropertyBinder | str] = None,
     ):
         if options is None:
             raise ValueError("Options should not be None.")
@@ -33,6 +34,12 @@ class AdvProperty(Generic[T], property, TProperty[T]):
         self._default_factory = options.default_factory
         self._actual_name = options.actual_name
 
+        if binder is not None:
+            if isinstance(binder, str):
+                binder = PropertyBinder(binder)
+
+        self._binder = binder
+
     def __set_name__(self, owner: type[object], name: str) -> None:
         self._actual_name = name
         self._options.actual_name = name
@@ -45,6 +52,7 @@ class AdvProperty(Generic[T], property, TProperty[T]):
             fset,
             self.fdel,
             self.__doc__,
+            self.binder,
         )
         return prop
 
@@ -56,6 +64,7 @@ class AdvProperty(Generic[T], property, TProperty[T]):
             self.fset,
             self.fdel,
             self.__doc__,
+            self.binder,
         )
         return prop
 
@@ -67,12 +76,44 @@ class AdvProperty(Generic[T], property, TProperty[T]):
             self.fset,
             fdel,
             self.__doc__,
+            self.binder,
         )
         return prop
 
+    @property
+    def binder(self) -> Optional[PropertyBinder]:
+        """Indicates if the value should be transferred from another attribute."""
+        return self._binder
+
+
+@overload
+def make_property(
+    __type_of_entity: type[Any],
+    /,
+    *,
+    options: Optional[PropertyOptions[T]] = None,
+    binder: Optional[PropertyBinder] = None,
+) -> Callable[..., AdvProperty[T]]:
+    """Make actual properties that we're going to deal with."""
+
+
+@overload
+def make_property(
+    __type_of_entity: type[Any],
+    /,
+    *,
+    options: Optional[PropertyOptions[T]] = None,
+    binder: str | None = None,
+) -> Callable[..., AdvProperty[T]]:
+    """Make actual properties that we're going to deal with."""
+
 
 def make_property(
-    __type_of_entity: type[Any], /, *, options: Optional[PropertyOptions[T]] = None
+    __type_of_entity: type[Any],
+    /,
+    *,
+    options: Optional[PropertyOptions[T]] = None,
+    binder: Optional[PropertyBinder | str] = None,
 ) -> Callable[..., AdvProperty[T]]:
     """Make actual properties that we're going to deal with."""
 
@@ -92,6 +133,7 @@ def make_property(
             fset=fset,
             fdel=fdel,
             doc=doc,
+            binder=binder,
         )
 
     return _wrapper
