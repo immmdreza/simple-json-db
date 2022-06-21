@@ -15,7 +15,9 @@ class Student(TEntity):
         self._private_key = str(uuid4())
 
     @make_property(
-        str, options=PropertyOptions(init=False, required=True), binder="_private_key"
+        str,
+        options=PropertyOptions(init=False, required=True),
+        binder="_private_key",  # The serializations use this for getting or setting.
     )
     def private_key(self):
         # private_key is an actual property
