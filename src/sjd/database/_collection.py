@@ -163,6 +163,13 @@ class AbstractCollection(Generic[_TMasterEntity, _TKey, T], ABC):
             async for data in tmp_file:
                 yield data
 
+    def __ilshift__(self, entity: tuple[T, ...] | T):
+        if isinstance(entity, tuple):
+            self.add_range(*entity)
+        else:
+            self.add(entity)
+        return self
+
     @abstractmethod
     def _check_by_id(self, line_of: str, __id: _TKey) -> bool:
         ...
