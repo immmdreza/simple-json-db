@@ -257,18 +257,18 @@ class Engine:
         """
         return self.__configs.get_collection_config(_entity_type)
 
-    async def save_changes_async(self, *ignore_collections: type[Any]) -> int:
-        """Save changes for all registered collections
+    # buggy
+    # async def save_changes_async(self, *ignore_collections: type[Any]) -> int:
+    #     """Save changes for all registered collections
 
+    #     Args:
+    #         ignore_collections (`type[Any]`): The entity type of the collections
+    #         to ignore save on.
+    #     """
 
-        Args:
-            ignore_collections (`type[Any]`): The entity type of the collections
-            to ignore save on.
-        """
-
-        all_changes = 0
-        for entity_type, collection in self.__collections.items():
-            if entity_type in ignore_collections:
-                continue
-            all_changes += await collection.save_changes_async()
-        return all_changes
+    #     all_changes = 0
+    #     for entity_type, collection in self.__collections.items():
+    #         if entity_type in ignore_collections:
+    #             continue
+    #         all_changes += await collection.save_changes_async()
+    #     return all_changes
