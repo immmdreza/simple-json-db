@@ -28,6 +28,11 @@ class _EntityTracker(Generic[_TKey, T]):
         self._initial_schema = serialize(self._entity_to_track)
         self._tracking_mode = TrackingMode.UPDATE
 
+    def replace_entity(self, new_entity: T):
+        """Replace slave entity."""
+        self._master_entity.slave = new_entity
+        self._entity_to_track = new_entity
+
     @property
     def modified(self) -> bool:
         """Returns True if the entity has been modified."""

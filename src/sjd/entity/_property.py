@@ -65,6 +65,10 @@ class TProperty(Generic[T], ABC):
                 " or super().__init__ inside it?"
             )
 
+        if self._actual_name not in obj.__dict__:
+            default = self._default_factory() if self._default_factory else None
+            obj.__dict__[self._actual_name] = default
+            return default  # type: ignore
         return cast(T, obj.__dict__[self._actual_name])
 
     def __set__(self, obj: object, value: T) -> None:

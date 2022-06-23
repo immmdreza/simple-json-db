@@ -253,6 +253,13 @@ class AbstractCollection(Generic[_TMasterEntity, _TKey, T], ABC):
             if not self._collection_exists():
                 await self._create_collection()
 
+    def _get_reference_prop(self, entity: TEntity, refers_to: str):
+        for virt_prop in entity.get_properties():
+            if isinstance(virt_prop, ReferenceProperty):
+                if virt_prop.actual_name == refers_to:
+                    return virt_prop
+        return None
+
     @final
     async def _manage_referral_properties(self, entity: MasterEntity[_TKey, T]):
         for prop in entity.slave.get_properties():  # type: ignore
@@ -261,28 +268,33 @@ class AbstractCollection(Generic[_TMasterEntity, _TKey, T], ABC):
                     entity.slave, prop.actual_name
                 )
 
+                col = self._engine.get_collection(prop.type_of_entity)
+
                 if not isinstance(values, list):
                     values = [values]
-
-                for value in values:
-                    virtual_reference_found = False
-                    for virt_prop in value.get_properties():
-                        if isinstance(virt_prop, ReferenceProperty):
-                            if virt_prop.actual_name == prop.refers_to:
-                                virtual_reference_found = True
-
-                                setattr(value, virt_prop.actual_name, entity.id)
-
-                                # get a collection for reference type
-                                col = self._engine.get_collection(prop.type_of_entity)
-
+                else:
+                    for value in values:
+                        reference = self._get_reference_prop(value, prop.refers_to)
+                        if reference is not None:
+                            # get if the value exists for this property
+                            tracking_id = col.resolve_tracked_entity_id(value)
+                            if tracking_id is None:
+                                setattr(value, reference.actual_name, entity.id)
                                 col.add(value)  # type: ignore
-                                delattr(entity.slave, prop.actual_name)
-                                await col.save_changes_async()
-                    if not virtual_reference_found:
-                        raise TypeError(
-                            f"No ReferenceProperty found for {prop.refers_to}."
-                        )
+                            else:
+                                saved_value = await col.get_first_async(
+                                    prop.refers_to, entity.id
+                                )
+                                if saved_value is None:
+                                    col.add(value)  # type: ignore
+                                else:
+                                    col.replace_entity(saved_value, value)
+                        else:
+                            raise TypeError(
+                                f"No ReferenceProperty found for {prop.refers_to}."
+                            )
+                    delattr(entity.slave, prop.actual_name)
+                    await col.save_changes_async()
 
     async def _care_about_virtual_props(self, master: MasterEntity[_TKey, T]):
         col_config = self.configuration
@@ -339,7 +351,7 @@ class AbstractCollection(Generic[_TMasterEntity, _TKey, T], ABC):
                     updated_data["created"][tracked.key] = tracked.master_entity
 
         changes_made_count = 0
-        if len(updated_data) > 0:
+        if any(any(mode) for mode in updated_data.values()):
             await self._ensure_collection_exists()
             async with self._main_file_lock:
                 file_path = self._collection_path_builder()
@@ -369,9 +381,9 @@ class AbstractCollection(Generic[_TMasterEntity, _TKey, T], ABC):
                                     modified = True
                                     changes_made_count += 1
                                 elif line_id in updated_data["updated"]:
-                                    data = json.dumps(
-                                        serialize(updated_data["updated"][line_id])
-                                    )
+                                    entity = updated_data["updated"][line_id]
+                                    await self._manage_referral_properties(entity)
+                                    data = json.dumps(serialize(entity))
                                     await tmp_f.write(data + "\n")
                                     modified = True
                                     changes_made_count += 1
@@ -409,6 +421,22 @@ class AbstractCollection(Generic[_TMasterEntity, _TKey, T], ABC):
         if tracker.tracking_mode == mode:
             return
         tracker.set_tracking_mode(mode)
+
+    def replace_entity(self, old_entity: T, new_entity: T) -> T:
+        """Replace whole entity with another of same type,
+        useful for updating entity."""
+        if not isinstance(old_entity, self.entity_type) or not isinstance(
+            new_entity, self.entity_type
+        ):
+            raise TypeError(f"Both entities should an instance of {self.entity_type}")
+
+        tracking_id = self.resolve_tracked_entity_id(old_entity)
+        if tracking_id is None:
+            raise ValueError("Entity is not tracked.")
+
+        setattr(new_entity, "__tracking_id__", tracking_id)
+        self._entity_trackers[tracking_id].replace_entity(new_entity)
+        return new_entity
 
     def get_queryable(self) -> _CollectionQueryableContext[_TMasterEntity, _TKey, T]:
         """Get an queryable context for this collection."""
