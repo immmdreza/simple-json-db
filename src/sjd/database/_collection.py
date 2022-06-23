@@ -170,6 +170,19 @@ class AbstractCollection(Generic[_TMasterEntity, _TKey, T], ABC):
             self.add(entity)
         return self
 
+    def __irshift__(self, entity: tuple[T, ...] | T):
+        if isinstance(entity, tuple):
+            self.delete_range(*entity)
+        else:
+            self.delete(entity)
+        return self
+
+    def __rshift__(self, _):
+        raise NotImplementedError
+
+    def __lshift__(self, _):
+        raise NotImplementedError
+
     @abstractmethod
     def _check_by_id(self, line_of: str, __id: _TKey) -> bool:
         ...

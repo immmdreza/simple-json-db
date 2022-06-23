@@ -41,6 +41,19 @@ class TEntity(ABC):
                 return other.add(self)
         raise TypeError(f"Entity cannot be added to collection of type {type(other)}.")
 
+    def __lshift__(
+        self: _T, other: "AbstractCollection[Any, Any, _T]"
+    ) -> "_EntityTracker[Any, _T]":
+        if hasattr(other, "entity_type"):
+            if isinstance(self, other.entity_type):
+                return other.delete(self)
+        raise TypeError(f"Entity cannot be added to collection of type {type(other)}.")
+
+    def __ilshift__(self, _):
+        raise NotImplementedError
+        
+    def __irshift__(self, _):
+        raise NotImplementedError
 
 class EmbeddedEntity(ABC):
     """Abstract template class for embed entities."""
