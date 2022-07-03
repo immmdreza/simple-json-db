@@ -1,7 +1,8 @@
-from typing import Any
+from typing import Any, Optional
 
 from ._shared import get_properties
 from ._serializable import Serializable
+from ..entity._property_options import PropertyBinder
 
 
 def serialize(entity: Any) -> Any:
@@ -28,10 +29,17 @@ def serialize(entity: Any) -> Any:
     for prop in get_properties(entity.__class__):
         j_prop_name = prop.json_property_name or prop.actual_name
 
-        if prop.actual_name not in entity.__dict__:
+        binder: Optional[PropertyBinder] = getattr(prop, "binder", None)
+        if binder is not None:
+            attribute_name = binder.attribute_name
+        else:
+            attribute_name = prop.actual_name
+
+        if not hasattr(entity, attribute_name):
             if prop.required:
                 raise ValueError(
-                    f"Property '{j_prop_name}' is required but not found in the entity."
+                    f"Property '{attribute_name}' "
+                    "is required but not found in the entity."
                 )
             if prop.default_factory is not None:
                 result[j_prop_name] = prop.default_factory()
@@ -39,15 +47,16 @@ def serialize(entity: Any) -> Any:
 
         if prop.is_list:
             result[j_prop_name] = [
-                serialize(x) for x in getattr(entity, prop.actual_name)
+                serialize(x) for x in getattr(entity, attribute_name)
             ]
         elif prop.is_complex:
-            result[j_prop_name] = serialize(getattr(entity, prop.actual_name))
+            result[j_prop_name] = serialize(getattr(entity, attribute_name))
         else:
+            value = getattr(entity, attribute_name)
             if isinstance(prop, Serializable):
-                result[j_prop_name] = prop.serialize()
+                result[j_prop_name] = prop.serialize_from(value)
             else:
-                result[j_prop_name] = getattr(entity, prop.actual_name)
+                result[j_prop_name] = value
         found_props += 1
 
     if found_props == 0:

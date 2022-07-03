@@ -123,7 +123,7 @@ def auto_collect(
                             json_property_name=info[0],
                             is_list=info[3],
                             is_complex=info[4],
-                            default_factory=info[0],  # type: ignore
+                            default_factory=lambda: info[0],  # type: ignore
                             actual_name=info[0],
                         )
 

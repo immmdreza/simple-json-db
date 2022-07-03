@@ -1,5 +1,5 @@
 from abc import ABC
-from typing import Any, Callable, Generic, Optional, TypeVar, overload, cast
+from typing import Any, Callable, Generic, Optional, TypeVar, cast
 
 from ..serialization._serializable import Serializable
 
@@ -50,25 +50,14 @@ class TProperty(Generic[T], ABC):
         self._is_list: bool = is_list
         self._is_complex: bool = is_complex
         self._default_factory = default_factory
-        self._access_trail: tuple[str, ...]
         self._actual_name = actual_name
 
     def __set_name__(self, owner: type[object], name: str) -> None:
         self._actual_name = name
 
-    @overload
-    def __get__(self, obj: None, objtype: None) -> "TProperty[T]":
-        ...
-
-    @overload
-    def __get__(self, obj: object, objtype: type[object]) -> T:
-        ...
-
-    def __get__(
-        self, obj: object | None, objtype: type[object] | None = None
-    ) -> "TProperty[T]" | T:
+    def __get__(self, obj: Any, objtype: Any = None) -> T:
         if obj is None:
-            return self
+            return self  # type: ignore
 
         if self._actual_name is None:
             raise AttributeError(
@@ -76,6 +65,10 @@ class TProperty(Generic[T], ABC):
                 " or super().__init__ inside it?"
             )
 
+        if self._actual_name not in obj.__dict__:
+            default = self._default_factory() if self._default_factory else None
+            obj.__dict__[self._actual_name] = default
+            return default  # type: ignore
         return cast(T, obj.__dict__[self._actual_name])
 
     def __set__(self, obj: object, value: T) -> None:
@@ -204,7 +197,6 @@ class SerializableProperty(Generic[T], TProperty[T], Serializable[T]):
             A function that returns a default value for the property. Defaults to None.
         """
 
-        self._value: Optional[T] = None
         super().__init__(
             _type_of_entity,
             init=init,
@@ -225,10 +217,3 @@ class SerializableProperty(Generic[T], TProperty[T], Serializable[T]):
             )
 
         obj.__dict__[self._actual_name] = value
-        self._value = value
-
-    @property
-    def value(self):
-        """Get actual value of the property."""
-
-        return self._value
