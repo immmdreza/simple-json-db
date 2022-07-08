@@ -143,20 +143,15 @@ class AbstractCollection(Generic[_TMasterEntity, _TKey, T], ABC):
         self._engine = engine
 
         self._main_file_lock = asyncio.Lock()
-        self._main_iter_ctx: Optional[
-            _CollectionQueryableContext[_TMasterEntity, _TKey, T]
-        ] = None
         self._entity_trackers: dict[_TKey, _EntityTracker[_TKey, T]] = {}
 
     async def __aenter__(self):
-        self._main_iter_ctx = self.get_queryable()
-        return self._main_iter_ctx
+        """Enters a context that will save all changes when it is closed."""
+        return self
 
-    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any):
-        if self._main_iter_ctx is not None:
-            if not self._main_iter_ctx.closed:
-                await self._main_iter_ctx.close()
-            self._main_iter_ctx = None
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Saves all changes made to the collection."""
+        await self.save_changes_async()
 
     async def __aiter__(self):
         async with self.get_queryable() as tmp_file:
@@ -706,7 +701,7 @@ class AbstractCollection(Generic[_TMasterEntity, _TKey, T], ABC):
         """Count the number of entities in the collection."""
 
         await self._ensure_collection_exists()
-        async with self as iter_ctx:
+        async with self.get_queryable() as iter_ctx:
             count = 0
             async for _ in iter_ctx.iter_lines():
                 count += 1

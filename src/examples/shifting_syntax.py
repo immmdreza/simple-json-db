@@ -19,26 +19,24 @@ async def main():
     engine = AppEngine()
     customers_collection = engine.customers
 
-    customers_collection <<= Customer("Arash"), Customer("Sara")
-    tracked = Customer("Kiarash") >> customers_collection
-    # Both of above ways will call add() method of customers_collection
-    # using second way, you can only add one! but you receive a free tracking instance
-    # which contains information about changes in entity, and entity id.
-    print("A new entity will be added with id:", tracked.key)
+    async with customers_collection:  # <-- this will save changes automatically on exit
+        customers_collection <<= Customer("Arash"), Customer("Sara")
+        tracked = Customer("Kiarash") >> customers_collection
+        # Both of above ways will call add() method of customers_collection
+        # using second way, you can only add one! but you receive a free tracking instance
+        # which contains information about changes in entity, and entity id.
+        print("A new entity will be added with id:", tracked.key)
 
-    await customers_collection.save_changes_async()
+    async with customers_collection:
+        async for customer in customers_collection:
+            customers_collection >>= customer
+            # Using above syntax is same as calling: customers_collection.delete(customer)
+            break
 
-    async for customer in customers_collection:
-        customers_collection >>= customer
-        # Using above syntax is same as calling: customers_collection.delete(customer)
-        break
-
-    # Again, using below syntax, you can get tracking instance as well.
-    async for customer in customers_collection:
-        tracked = customer << customers_collection
-        print(f"An entity with id {tracked.key}, is going to be deleted!")
-
-    await customers_collection.save_changes_async()
+        # Again, using below syntax, you can get tracking instance as well.
+        async for customer in customers_collection:
+            tracked = customer << customers_collection
+            print(f"An entity with id {tracked.key}, is going to be deleted!")
 
     # NOTE: no other kind of shifting are allowed only these four!
     # ---------------------------------------------

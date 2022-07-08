@@ -15,7 +15,6 @@ class Student(TEntity):
 
 class AppEngine(Engine):
     __db_path__ = "__test_db__"
-
     students = Engine.set(Student)
 
 
@@ -23,8 +22,11 @@ async def main():
 
     engine = AppEngine()
 
-    engine.students.add(Student("John", "Doe"))
-    await engine.save_changes_async()
+    async with engine.students as students:
+        students.add_range(Student("John", "Doe"), Student("Jane", "Doe"))
+
+    async for student in engine.students:
+        print(student.first_name, student.last_name)
 
 
 if __name__ == "__main__":

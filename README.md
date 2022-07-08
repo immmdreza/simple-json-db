@@ -4,6 +4,17 @@ This is a simple json database.
 The package provides a simple ORM between python objects and
 json objects with a well type-hinted schema.
 
+```py
+engine = AppEngine()
+
+async with engine.students as students:
+    students.add_range(Student("John", "Doe"), Student("Jane", "Doe"))
+
+async for student in engine.students:
+    print(student.first_name, student.last_name)
+    # Can you guess ? )
+```
+
 This package maps your python objects to json and then you can save, get,
 modify or delete them using async methods.
 
@@ -64,7 +75,8 @@ the model will automatically collect properties form `__init__` method.
 
 ### Creating collection ?
 
-It's really not necessary to create a collection by your own! And maybe you better )
+It's really not necessary to create a collection by your own!
+And maybe you better )
 
 Let us do that for ya ( Of course you can create customized Collections ).
 
@@ -76,11 +88,8 @@ Now you need to setup database's engine and define your collections there.
 # ---- sniff ----
 
 class AppEngine(Engine):
-
+    __db_path__ = "my_database"
     persons = Engine.set(Person)
-
-    def __init__(self):
-        super().__init__("MoyDatabase")
 ```
 
 That's all you need to do for now.
@@ -112,13 +121,13 @@ async def main():
     engine = AppEngine()
     collection = engine.persons
 
-    collection.add_range(
-        Person("John", "Doe", 20),
-        Person("Jane", "Doe", 21),
-        Person("Jack", "jones", 22),
-        Person("Jill", "jones", 23),
-    )
-    await collection.save_changes_async()
+    async with collection:
+        collection.add_range(
+            Person("John", "Doe", 20),
+            Person("Jane", "Doe", 21),
+            Person("Jack", "jones", 22),
+            Person("Jill", "jones", 23),
+        )
 
 ```
 
